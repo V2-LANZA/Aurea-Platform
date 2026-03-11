@@ -1,0 +1,72 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Aurea Alerts</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Arial; margin: 24px; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #ddd; padding: 6px 8px; }
+    th { background: #f6f6f6; }
+    #status { color:#666; margin-left:8px; }
+    input[type=text] { padding:6px 8px; }
+  </style>
+</head>
+<body>
+  <h1>Aurea Alerts</h1>
+  <div>
+    <label>Token:</label>
+    <input id="token" type="text" style="width:620px" placeholder="paste RAW JWT" />
+  </div>
+  <div style="margin-top:8px;">
+    <label>Group ID:</label>
+    <input id="gid" type="text" value="2" style="width:80px" />
+    <button id="load">Load</button>
+    <span id="status"></span>
+  </div>
+
+  <table style="margin-top:12px;">
+    <thead>
+      <tr><th>ID</th><th>Message ID</th><th>Score</th><th>Reasons</th><th>Created</th></tr>
+    </thead>
+    <tbody id="rows"></tbody>
+  </table>
+
+  <script>
+    const tokenEl = document.getElementById('token');
+    const gidEl = document.getElementById('gid');
+    const loadBtn = document.getElementById('load');
+    const rows = document.getElementById('rows');
+    const statusEl = document.getElementById('status');
+
+    async function load() {
+      const gid = gidEl.value.trim();
+      const token = tokenEl.value.trim();
+      statusEl.textContent = 'loading...';
+
+      const res = await fetch(`/alerts/${encodeURIComponent(gid)}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      statusEl.textContent = res.ok ? 'ok' : `error ${res.status}`;
+
+      if (!res.ok) return;
+      const data = await res.json(); // expected list of alerts
+
+      rows.innerHTML = '';
+      for (const a of data) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${a.id}</td>
+          <td>${a.message_id}</td>
+          <td>${a.score?.toFixed?.(2) ?? a.score}</td>
+          <td>${a.reasons}</td>
+          <td>${a.created_at ?? ''}</td>
+        `;
+        rows.appendChild(tr);
+      }
+    }
+
+    loadBtn.onclick = load;
+  </script>
+</body>
+</html>

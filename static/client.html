@@ -1,0 +1,209 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Aurea Live Chat</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Arial; margin: 24px; }
+    #log { height: 420px; border: 1px solid #ddd; padding: 8px; overflow-y: auto; }
+    #status { color: #666; margin-left: 8px; }
+    input[type=text] { padding: 6px 8px; }
+    button { padding: 6px 10px; }
+    .sys { color:#666; }
+    .warn { color:#b80; }
+    .msg { margin: 2px 0; }
+    .small { font-size: 12px; color:#888; }
+  </style>
+</head>
+<body>
+  <h1>Aurea Live Chat</h1>
+
+  <div>
+    <label>Token:</label>
+    <input id="token" type="text" style="width:620px" placeholder="paste RAW JWT (no 'Bearer')" />
+  </div>
+
+  <div style="margin-top:8px;">
+    <label>Group ID:</label>
+    <input id="gid" type="text" value="2" style="width:80px" />
+
+    <label style="margin-left:10px;">API Host:</label>
+    <input id="host" type="text" value="127.0.0.1:8000" style="width:180px" />
+
+    <button id="connect">Connect</button>
+    <span id="status">closed</span>
+  </div>
+
+  <div class="small" style="margin-top:6px;">
+    Tip: If your HTML is served by FastAPI, set host to <code>location.host</code> (auto button below).
+    <button id="useSameHost" style="padding:2px 6px; font-size:12px;">Use same host</button>
+  </div>
+
+  <h3>Messages</h3>
+  <div id="log"></div>
+
+  <div style="margin-top:8px;">
+    <input id="msg" type="text" placeholder="type message..." style="width:680px" />
+    <button id="send">Send</button>
+  </div>
+
+  <script>
+    const tokenEl = document.getElementById('token');
+    const gidEl   = document.getElementById('gid');
+    const hostEl  = document.getElementById('host');
+    const connectBtn = document.getElementById('connect');
+    const statusEl = document.getElementById('status');
+    const log = document.getElementById('log');
+    const msgEl = document.getElementById('msg');
+    const sendBtn = document.getElementById('send');
+    const sameHostBtn = document.getElementById('useSameHost');
+
+    function line(html, cls='') {
+      const p = document.createElement('div');
+      p.className = `msg ${cls}`.trim();
+      p.innerHTML = html;
+      log.appendChild(p);
+      log.scrollTop = log.scrollHeight;
+    }
+
+    function setStatus(s) {
+      statusEl.textContent = s;
+    }
+
+    let ws = null;
+
+    function buildWsUrl() {
+      const token = tokenEl.value.trim(); // RAW token
+      const gid = gidEl.value.trim();
+      const host = hostEl.value.trim() || "127.0.0.1:8000";
+
+      const proto = (location.protocol === "https:") ? "wss" : "ws";
+      return `${proto}://${host}/ws/${encodeURIComponent(gid)}?token=${encodeURIComponent(token)}`;
+    }
+
+    function safeClose() {
+      if (ws) {
+        try { ws.close(); } catch (_) {}
+        ws = null;
+      }
+    }
+
+    sameHostBtn.onclick = () => {
+      hostEl.value = location.host;
+      line(`<em class="sys">host set to ${location.host}</em>`, 'sys');
+    };
+
+    connectBtn.onclick = () => {
+      // toggle
+      if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+        safeClose();
+        setStatus('closed');
+        line('<em class="sys">disconnected</em>', 'sys');
+        connectBtn.textContent = "Connect";
+        return;
+      }
+
+      const token = tokenEl.value.trim();
+      if (!token) {
+        line('<span class="warn">error: paste a JWT token first</span>', 'warn');
+        return;
+      }
+
+      const url = buildWsUrl();
+      safeClose();
+
+      setStatus('connecting...');
+      connectBtn.textContent = "Disconnect";
+      line(`<em class="sys">connecting → ${url}</em>`, 'sys');
+
+      ws = new WebSocket(url);
+
+      ws.onopen = () => {
+        setStatus('open');
+        line('<em class="sys">connected</em>', 'sys');
+      };
+
+      ws.onmessage = (evt) => {
+        // server may send text or JSON
+        let data = null;
+        try { data = JSON.parse(evt.data); } catch { /* ignore */ }
+
+        if (!data) {
+          line(evt.data);
+          return;
+        }
+
+        // Normalize:
+        // - type: "system" {text}
+        // - type: "error" {detail or text}
+        // - type: "message" {text, author_id, risk_score, rules}
+        // - type: "chat" {text, user_id, score}
+        const t = data.type;
+
+        if (t === 'system') {
+          line(`<em class="sys">${data.text ?? 'system'}</em>`, 'sys');
+          return;
+        }
+
+        if (t === 'error') {
+          const msg = data.detail ?? data.text ?? 'error';
+          line(`<span class="warn">error: ${msg}</span>`, 'warn');
+          return;
+        }
+
+        if (t === 'message' || t === 'chat') {
+          const who = data.author_id ?? data.user_id ?? 'user';
+          const text = data.text ?? '';
+          const score = data.risk_score ?? data.score ?? 0;
+          const risk = (score >= 0.6) ? ' <span class="warn">(risk)</span>' : '';
+          line(`<strong>${who}:</strong> ${escapeHtml(text)}${risk}`);
+          return;
+        }
+
+        // fallback
+        line(escapeHtml(evt.data));
+      };
+
+      ws.onclose = (evt) => {
+        setStatus('closed');
+        connectBtn.textContent = "Connect";
+        line(`<em class="sys">closed (${evt.code})</em>`, 'sys');
+      };
+
+      ws.onerror = () => {
+        line('<span class="warn">socket error</span>', 'warn');
+      };
+    };
+
+    sendBtn.onclick = () => {
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        line('<span class="warn">not connected</span>', 'warn');
+        return;
+      }
+      const text = msgEl.value.trim();
+      if (!text) return;
+
+      // Send the simplest payload (most WS handlers expect this)
+      // If your server expects {type:"chat", text}, keep that instead.
+      ws.send(JSON.stringify({ text }));
+
+      msgEl.value = '';
+      msgEl.focus();
+    };
+
+    msgEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') sendBtn.click();
+    });
+
+    // Basic escaping for display
+    function escapeHtml(str) {
+      return String(str)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+  </script>
+</body>
+</html>
