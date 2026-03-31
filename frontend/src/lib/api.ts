@@ -1,27 +1,41 @@
 import axios from "axios";
-import { getToken } from "./auth";
+import { clearAuth, getToken } from "./auth";
 
-export const API_BASE =
+const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE || "http://127.0.0.1:8000";
 
 export const api = axios.create({
   baseURL: API_BASE,
+  headers: {
+    "Content-Type": "application/json",
+  },
 });
 
 api.interceptors.request.use((config) => {
   const token = getToken();
-  config.headers = config.headers ?? {};
 
   if (token) {
-    (config.headers as any).Authorization = `Bearer ${token}`;
-  } else {
-    delete (config.headers as any).Authorization;
+    config.headers = config.headers ?? {};
+    config.headers.Authorization = `Bearer ${token}`;
   }
-
-  // ✅ debug (you can remove later)
-  console.log("[API]", config.method?.toUpperCase(), config.url, {
-    Authorization: (config.headers as any).Authorization,
-  });
 
   return config;
 });
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error?.response?.status === 401) {
+      clearAuth();
+      if (typeof window !== "undefined") {
+        const authPage =
+          window.location.pathname === "/login" ||
+          window.location.pathname === "/register";
+        if (!authPage) {
+          window.location.href = "/login";
+        }
+      }
+    }
+    return Promise.reject(error);
+  }
+);

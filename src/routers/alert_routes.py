@@ -1,43 +1,28 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Optional
+
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from ..deps import get_db
-from ..auth import get_current_user
-from ..models import Alert, GroupMember
+from ..deps import get_current_user, get_db
+from ..models import Alert, GroupMember, User
+from ..schemas import AlertOut
 
-router = APIRouter()  # IMPORTANT: no prefix here
-
-
-def _is_member(db: Session, gid: int, uid: int) -> bool:
-    return db.query(GroupMember).filter_by(group_id=gid, user_id=uid).first() is not None
+router = APIRouter()
 
 
-@router.get("/{gid}")
-def list_alerts(gid: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
-    if not _is_member(db, gid, user.id):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not a member of this group")
-
-    rows = (
+@router.get("", response_model=list[AlertOut])
+def list_alerts(
+    group_id: Optional[int] = Query(default=None),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    query = (
         db.query(Alert)
-        .filter(Alert.group_id == gid)
-        .order_by(Alert.created_at.desc())
-        .limit(50)
-        .all()
+        .join(GroupMember, GroupMember.group_id == Alert.group_id)
+        .filter(GroupMember.user_id == current_user.id)
     )
 
-    out = []
-    for a in rows:
-        reasons = []
-        if getattr(a, "reasons", None):
-            reasons = [r.strip() for r in a.reasons.split(",") if r.strip()]
+    if group_id is not None:
+        query = query.filter(Alert.group_id == group_id)
 
-        out.append(
-            {
-                "id": a.id,
-                "message_id": a.message_id,
-                "score": getattr(a, "score", None),
-                "reasons": reasons,
-                "created_at": a.created_at.isoformat() if hasattr(a.created_at, "isoformat") else str(a.created_at),
-            }
-        )
-    return out
+    return query.order_by(Alert.created_at.desc()).all()

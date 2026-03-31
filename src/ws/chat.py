@@ -1,195 +1,177 @@
-from __future__ import annotations
-
-from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Dict, Set, Optional, Any
+import json
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from sqlalchemy.orm import Session
 
-from ..deps import get_db
-from ..auth import get_current_user_ws
-from ..models import GroupMember  # adjust if your membership model is named differently
+from ..auth import decode_token, hash_password
+from ..db import SessionLocal
+from ..models import Alert, GroupMember, Message, User
+from ..services.bot import build_alert_detail, build_bot_reply, humanize_reasons
+from ..services.detect import analyze
+from .hub import manager
 
 router = APIRouter()
 
-
-# -----------------------------
-# Connection manager (per group)
-# -----------------------------
-@dataclass
-class Connection:
-    ws: WebSocket
-    user_id: int
-    username: str
+RISK_THRESHOLD = 0.3
+BOT_USERNAME = "__aurea_bot__"
+BOT_EMAIL = "aurea-bot@local"
 
 
-class GroupHub:
-    def __init__(self) -> None:
-        self.groups: Dict[int, Set[Connection]] = {}
-
-    def add(self, group_id: int, conn: Connection) -> None:
-        if group_id not in self.groups:
-            self.groups[group_id] = set()
-        self.groups[group_id].add(conn)
-
-    def remove(self, group_id: int, conn: Connection) -> None:
-        if group_id in self.groups:
-            self.groups[group_id].discard(conn)
-            if not self.groups[group_id]:
-                del self.groups[group_id]
-
-    async def broadcast(self, group_id: int, payload: dict) -> None:
-        conns = list(self.groups.get(group_id, []))
-        dead: list[Connection] = []
-        for c in conns:
-            try:
-                await c.ws.send_json(payload)
-            except Exception:
-                dead.append(c)
-        for d in dead:
-            self.remove(group_id, d)
+def _extract_content(raw: str) -> str:
+    try:
+        data = json.loads(raw)
+        if isinstance(data, dict):
+            return str(data.get("content", "")).strip()
+    except json.JSONDecodeError:
+        pass
+    return raw.strip()
 
 
-hub = GroupHub()
+def _display_name(user: User | None) -> str:
+    if not user:
+        return "unknown"
+    return user.full_name or user.username
 
 
-# -----------------------------
-# Helpers
-# -----------------------------
-def _db_session() -> Session:
-    """
-    get_db() is a generator dependency in FastAPI.
-    In WebSockets, we manually create a session by advancing it once.
-    """
-    gen = get_db()
-    return next(gen)
+def _get_or_create_bot_user(db) -> User:
+    bot = db.query(User).filter(User.username == BOT_USERNAME).first()
+    if bot:
+        return bot
 
-
-def _iso_now() -> str:
-    return datetime.now(timezone.utc).isoformat()
-
-
-def _is_member(db: Session, group_id: int, user_id: int) -> bool:
-    return (
-        db.query(GroupMember)
-        .filter(GroupMember.group_id == group_id, GroupMember.user_id == user_id)
-        .first()
-        is not None
+    bot = User(
+        username=BOT_USERNAME,
+        email=BOT_EMAIL,
+        full_name="Aurea Bot",
+        password_hash=hash_password("bot-not-for-login"),
     )
+    db.add(bot)
+    db.commit()
+    db.refresh(bot)
+    return bot
 
 
-def _risk_analyse(text: str) -> dict:
-    """
-    Optional stub.
-    If you already have a real risk flagger, replace this with your function.
-    Return shape:
-      { "flagged": bool, "score": number|None, "reasons": [..] }
-    """
-    lowered = text.lower()
-    reasons = []
-    score = 0.0
-
-    keywords = ["meet me", "address", "send pics", "nude", "where do you live", "alone", "secret"]
-    for k in keywords:
-        if k in lowered:
-            reasons.append(k)
-            score += 15
-
-    flagged = score >= 20
-    return {"flagged": flagged, "score": score if flagged else None, "reasons": reasons if flagged else []}
-
-
-# -----------------------------
-# WebSocket endpoint
-# -----------------------------
 @router.websocket("/ws/chat/{group_id}")
-async def ws_chat(websocket: WebSocket, group_id: int):
-    db = _db_session()
+async def chat_socket(websocket: WebSocket, group_id: int):
+    token = websocket.query_params.get("token")
+    if not token:
+        await websocket.close(code=4401, reason="Missing token")
+        return
 
-    # 1) Validate token and get user
     try:
-        user = await get_current_user_ws(websocket, db)
+        payload = decode_token(token)
     except Exception:
-        # accept then send error so frontend sees JSON
-        await websocket.accept()
-        await websocket.send_json({"type": "error", "detail": "Invalid/expired token"})
-        await websocket.close()
+        await websocket.close(code=4401, reason="Invalid/expired token")
         return
 
-    username = getattr(user, "email", None) or getattr(user, "username", None) or f"user-{user.id}"
-
-    # 2) Membership check
-    if not _is_member(db, group_id, user.id):
-        await websocket.accept()
-        await websocket.send_json({"type": "error", "detail": "Not a member of this group"})
-        await websocket.close()
+    user_id = payload.get("sub")
+    if not user_id:
+        await websocket.close(code=4401, reason="Invalid token payload")
         return
 
-    # 3) Accept WS + register connection
-    await websocket.accept()
-    conn = Connection(ws=websocket, user_id=user.id, username=str(username))
-    hub.add(group_id, conn)
-
-    # 4) Notify join
-    await hub.broadcast(
-        group_id,
-        {
-            "id": None,
-            "from": "system",
-            "text": f"{conn.username} joined group {group_id}",
-            "created_at": _iso_now(),
-        },
-    )
+    db = SessionLocal()
 
     try:
-        while True:
-            raw = await websocket.receive_text()
+        user = db.query(User).filter(User.id == int(user_id)).first()
+        member = db.query(GroupMember).filter_by(group_id=group_id, user_id=int(user_id)).first()
 
-            # We accept either:
-            #  - JSON: {"text":"hello"}
-            #  - plain text
-            text = raw
-            try:
-                import json
-                data = json.loads(raw)
-                if isinstance(data, dict) and "text" in data:
-                    text = str(data["text"])
-            except Exception:
-                pass
+        if not user or not member:
+            await websocket.close(code=4403, reason="Not a member of this group")
+            return
 
-            text = text.strip()
-            if not text:
-                continue
+        await manager.connect(group_id, websocket)
 
-            # 5) Risk analysis
-            risk = _risk_analyse(text)
-
-            # 6) Broadcast message to group
-            payload = {
-                "id": None,  # if you save messages, set actual id
-                "from": conn.username,
-                "text": text,
-                "created_at": _iso_now(),
-                "risk": risk,
-            }
-
-            await hub.broadcast(group_id, payload)
-
-    except WebSocketDisconnect:
-        hub.remove(group_id, conn)
-        await hub.broadcast(
-            group_id,
+        await manager.send_personal(
+            websocket,
             {
-                "id": None,
-                "from": "system",
-                "text": f"{conn.username} left",
-                "created_at": _iso_now(),
+                "type": "system",
+                "detail": f"Connected to group {group_id}",
             },
         )
+
+        while True:
+            raw = await websocket.receive_text()
+            content = _extract_content(raw)
+
+            if not content:
+                continue
+
+            message = Message(
+                group_id=group_id,
+                user_id=user.id,
+                content=content,
+            )
+            db.add(message)
+            db.commit()
+            db.refresh(message)
+
+            score, reasons = analyze(content)
+
+            await manager.broadcast(
+                group_id,
+                {
+                    "type": "message",
+                    "id": message.id,
+                    "group_id": group_id,
+                    "user_id": user.id,
+                    "username": _display_name(user),
+                    "full_name": user.full_name,
+                    "pronouns": user.pronouns,
+                    "avatar_url": user.avatar_url,
+                    "content": message.content,
+                    "created_at": message.created_at.isoformat() if message.created_at else None,
+                },
+            )
+
+            if score >= RISK_THRESHOLD:
+                severity = "high" if score >= 1 else "medium"
+                alert = Alert(
+                    group_id=group_id,
+                    message_id=message.id,
+                    sender_username=user.username,
+                    trigger_text=message.content,
+                    matched_reasons=", ".join(humanize_reasons(reasons)) or None,
+                    severity=severity,
+                    level="flagged",
+                    detail=build_alert_detail(reasons),
+                )
+                db.add(alert)
+                db.commit()
+
+                bot_text = build_bot_reply(content, score, reasons)
+                if bot_text:
+                    bot_user = _get_or_create_bot_user(db)
+
+                    bot_message = Message(
+                        group_id=group_id,
+                        user_id=bot_user.id,
+                        content=bot_text,
+                    )
+                    db.add(bot_message)
+                    db.commit()
+                    db.refresh(bot_message)
+
+                    await manager.broadcast(
+                        group_id,
+                        {
+                            "type": "bot",
+                            "id": bot_message.id,
+                            "group_id": group_id,
+                            "user_id": bot_user.id,
+                            "username": _display_name(bot_user),
+                            "full_name": bot_user.full_name,
+                            "pronouns": bot_user.pronouns,
+                            "avatar_url": bot_user.avatar_url,
+                            "content": bot_message.content,
+                            "created_at": bot_message.created_at.isoformat() if bot_message.created_at else None,
+                        },
+                    )
+
+    except WebSocketDisconnect:
+        manager.disconnect(group_id, websocket)
     except Exception:
-        hub.remove(group_id, conn)
+        manager.disconnect(group_id, websocket)
         try:
-            await websocket.close()
+            await websocket.close(code=1011, reason="Server error")
         except Exception:
             pass
+    finally:
+        db.close()

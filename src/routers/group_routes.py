@@ -1,98 +1,152 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
 import secrets
 import string
 
-from ..deps import get_db
-from ..auth import get_current_user
-from ..models import Group, GroupMember
-from ..schemas import GroupCreate, GroupOut, JoinIn
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
 
-router = APIRouter()  # prefix added in app.py as /groups
+from ..deps import get_current_user, get_db
+from ..models import Group, GroupMember, User
+from ..schemas import GroupCreate, GroupJoin, GroupOut, UserOut
+
+router = APIRouter()
 
 
-def _make_invite_code(n: int = 8) -> str:
+def _generate_invite_code(db: Session, length: int = 8) -> str:
     alphabet = string.ascii_uppercase + string.digits
-    return "".join(secrets.choice(alphabet) for _ in range(n))
+    while True:
+        code = "".join(secrets.choice(alphabet) for _ in range(length))
+        exists = db.query(Group).filter(Group.invite_code == code).first()
+        if not exists:
+            return code
 
 
-def _group_out(g: Group) -> dict:
-    return {
-        "id": g.id,
-        "name": g.name,
-        "invite_code": g.invite_code,
-        "bot_enabled": getattr(g, "bot_enabled", False),
-    }
+def _ensure_member(db: Session, group_id: int, user_id: int) -> Group:
+    group = (
+        db.query(Group)
+        .join(GroupMember, GroupMember.group_id == Group.id)
+        .filter(Group.id == group_id, GroupMember.user_id == user_id)
+        .first()
+    )
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+    return group
+
+
+def _user_out(user: User) -> UserOut:
+    return UserOut(
+        id=user.id,
+        username=user.username,
+        email=user.email,
+        full_name=user.full_name,
+        pronouns=user.pronouns,
+        bio=user.bio,
+        avatar_url=user.avatar_url,
+        role=user.role,
+        is_suspended=user.is_suspended,
+    )
+
+
+def _group_out(db: Session, group: Group) -> GroupOut:
+    members = (
+        db.query(User)
+        .join(GroupMember, GroupMember.user_id == User.id)
+        .filter(GroupMember.group_id == group.id)
+        .order_by(GroupMember.joined_at.asc())
+        .limit(4)
+        .all()
+    )
+    member_count = (
+        db.query(GroupMember)
+        .filter(GroupMember.group_id == group.id)
+        .count()
+    )
+
+    return GroupOut(
+        id=group.id,
+        name=group.name,
+        invite_code=group.invite_code,
+        member_count=member_count,
+        member_preview=[_user_out(member) for member in members],
+    )
 
 
 @router.get("", response_model=list[GroupOut])
-@router.get("/mine", response_model=list[GroupOut])
-def my_groups(db: Session = Depends(get_db), user=Depends(get_current_user)):
-    rows = (
+def list_groups(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    groups = (
         db.query(Group)
         .join(GroupMember, GroupMember.group_id == Group.id)
-        .filter(GroupMember.user_id == user.id)
-        .order_by(Group.id.desc())
+        .filter(GroupMember.user_id == current_user.id)
+        .order_by(Group.created_at.desc())
         .all()
     )
-    return [_group_out(g) for g in rows]
+    return [_group_out(db, group) for group in groups]
 
 
 @router.post("", response_model=GroupOut, status_code=status.HTTP_201_CREATED)
-@router.post("/create", response_model=GroupOut, status_code=status.HTTP_201_CREATED)
-def create_group(payload: GroupCreate, db: Session = Depends(get_db), user=Depends(get_current_user)):
-    # unique invite code
-    code = _make_invite_code()
-    for _ in range(10):
-        exists = db.query(Group).filter_by(invite_code=code).first()
-        if not exists:
-            break
-        code = _make_invite_code()
-    else:
-        raise HTTPException(status_code=500, detail="Could not generate invite code")
+def create_group(
+    payload: GroupCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    name = payload.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Group name is required")
 
-    # ✅ IMPORTANT: created_by required by your DB schema
-    g = Group(
-        name=payload.name,
-        invite_code=code,
-        bot_enabled=getattr(payload, "bot_enabled", False),
-        created_by=user.id,
+    group = Group(
+        name=name,
+        invite_code=_generate_invite_code(db),
+        created_by_id=current_user.id,
     )
-    db.add(g)
+    db.add(group)
     db.commit()
-    db.refresh(g)
+    db.refresh(group)
 
-    # creator is a member
-    existing = db.query(GroupMember).filter_by(group_id=g.id, user_id=user.id).first()
-    if not existing:
-        db.add(GroupMember(group_id=g.id, user_id=user.id))
-        db.commit()
+    membership = GroupMember(user_id=current_user.id, group_id=group.id)
+    db.add(membership)
+    db.commit()
+    db.refresh(group)
 
-    return _group_out(g)
+    return _group_out(db, group)
 
 
 @router.post("/join", response_model=GroupOut)
-def join_group(payload: JoinIn, db: Session = Depends(get_db), user=Depends(get_current_user)):
-    g = db.query(Group).filter_by(invite_code=payload.invite_code).first()
-    if not g:
+def join_group(
+    payload: GroupJoin,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    invite_code = payload.invite_code.strip().upper()
+    if not invite_code:
+        raise HTTPException(status_code=400, detail="Invite code is required")
+
+    group = db.query(Group).filter(Group.invite_code == invite_code).first()
+    if not group:
         raise HTTPException(status_code=404, detail="Invalid invite code")
 
-    existing = db.query(GroupMember).filter_by(group_id=g.id, user_id=user.id).first()
-    if not existing:
-        db.add(GroupMember(group_id=g.id, user_id=user.id))
-        db.commit()
+    existing = (
+        db.query(GroupMember)
+        .filter(
+            GroupMember.group_id == group.id,
+            GroupMember.user_id == current_user.id,
+        )
+        .first()
+    )
+    if existing:
+        return _group_out(db, group)
 
-    return _group_out(g)
+    db.add(GroupMember(user_id=current_user.id, group_id=group.id))
+    db.commit()
+    db.refresh(group)
+    return _group_out(db, group)
 
 
 @router.get("/{gid}", response_model=GroupOut)
-def get_group(gid: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
-    member = db.query(GroupMember).filter_by(group_id=gid, user_id=user.id).first()
-    if not member:
-        raise HTTPException(status_code=403, detail="Not a member of this group")
-
-    g = db.query(Group).filter_by(id=gid).first()
-    if not g:
-        raise HTTPException(status_code=404, detail="Group not found")
-
-    return _group_out(g)
+def get_group(
+    gid: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return _group_out(db, _ensure_member(db, gid, current_user.id))

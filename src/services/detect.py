@@ -1,17 +1,16 @@
-# src/services/detect.py
 import re
 
-
-
 PATTERNS = {
-    "ask_age":      r"\bhow old are you\b",
-    "secrecy":      r"\b(keep this between us|don't tell (?:your )?(?:parents|mom|dad))\b",
-    "ask_pics":     r"\bsend (?:pics?|photos?|pictures?)\b",
-    "meet_alone":   r"\bmeet (?:alone|in secret)\b",
-    "location":     r"\b(where do you live|what school do you go to)\b",
-    "sexual_terms": r"\b(nude|naked|sex|naughty)\b",
+    "ask_age": r"\b(how old are you|what is your age)\b",
+    "secrecy": r"\b(keep this between us|don't tell (?:your )?(?:parents|mom|dad)|keep it secret)\b",
+    "ask_pics": r"\b(send (?:pics?|photos?|pictures?|nudes?|images?))\b",
+    "meet_alone": r"\b(meet (?:alone|in secret)|come alone)\b",
+    "location": r"\b(where do you live|what school do you go to|where are you from|what is your address)\b",
+    "sexual_terms": r"\b(nude|nudes|naked|sex|sexual|naughty)\b",
 }
+
 RX = {k: re.compile(v, re.I) for k, v in PATTERNS.items()}
+
 
 def analyze(text: str) -> tuple[float, list[str]]:
     """Return (score 0..1, list_of_reason_keys) for a message."""

@@ -1,13 +1,21 @@
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
 from pathlib import Path
 
-from .db import engine, Base
-from .routers import auth_routes, group_routes, message_routes, alert_routes, user_routes
-from .ws.chat import router as ws_router
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from sqlalchemy import inspect, text
 
+from .db import Base, engine
+from .routers import (
+    admin_routes,
+    alert_routes,
+    auth_routes,
+    group_routes,
+    message_routes,
+    user_routes,
+)
+from .ws.chat import router as ws_router
 
 app = FastAPI(title="Aurea API")
 
@@ -16,7 +24,6 @@ STATIC_DIR = BASE_DIR / "static"
 
 if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
-
 
 allowed_origins = [
     "http://localhost:3000",
@@ -35,6 +42,22 @@ app.add_middleware(
 @app.on_event("startup")
 def on_startup():
     Base.metadata.create_all(bind=engine)
+    _ensure_user_profile_columns()
+
+
+def _ensure_user_profile_columns():
+    inspector = inspect(engine)
+    columns = {column["name"] for column in inspector.get_columns("users")}
+    additions = {
+        "pronouns": "ALTER TABLE users ADD COLUMN pronouns VARCHAR(50)",
+        "bio": "ALTER TABLE users ADD COLUMN bio TEXT",
+        "avatar_url": "ALTER TABLE users ADD COLUMN avatar_url TEXT",
+    }
+
+    with engine.begin() as connection:
+        for column_name, statement in additions.items():
+            if column_name not in columns:
+                connection.execute(text(statement))
 
 
 @app.get("/health")
@@ -42,13 +65,12 @@ def health():
     return {"status": "ok"}
 
 
-# IMPORTANT: prefixes are defined HERE
 app.include_router(auth_routes.router, prefix="/auth", tags=["auth"])
 app.include_router(user_routes.router, prefix="/users", tags=["users"])
 app.include_router(group_routes.router, prefix="/groups", tags=["groups"])
-app.include_router(message_routes.router, prefix="/messages", tags=["messages"])
+app.include_router(message_routes.router)
 app.include_router(alert_routes.router, prefix="/alerts", tags=["alerts"])
-
+app.include_router(admin_routes.router, prefix="/admin", tags=["admin"])
 app.include_router(ws_router)
 
 

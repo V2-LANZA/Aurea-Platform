@@ -1,47 +1,36 @@
-# aurea-platform/src/ws/hub.py
-from __future__ import annotations
-
 from collections import defaultdict
-from typing import Dict, Any
+
 from fastapi import WebSocket
 
 
 class ConnectionManager:
-    """
-    Keeps active websocket connections per group.
-    groups[gid][uid] = websocket
-    """
-    def __init__(self) -> None:
-        self.groups: Dict[int, Dict[int, WebSocket]] = defaultdict(dict)
+    def __init__(self):
+        self.active_connections: dict[int, set[WebSocket]] = defaultdict(set)
 
-    async def connect(self, gid: int, uid: int, ws: WebSocket) -> None:
-        self.groups[gid][uid] = ws
+    async def connect(self, group_id: int, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections[group_id].add(websocket)
 
-    def disconnect(self, gid: int, uid: int) -> None:
-        if gid in self.groups and uid in self.groups[gid]:
-            del self.groups[gid][uid]
-        if gid in self.groups and not self.groups[gid]:
-            del self.groups[gid]
+    def disconnect(self, group_id: int, websocket: WebSocket):
+        if group_id in self.active_connections and websocket in self.active_connections[group_id]:
+            self.active_connections[group_id].remove(websocket)
+            if not self.active_connections[group_id]:
+                self.active_connections.pop(group_id, None)
 
-    async def broadcast(self, gid: int, payload: Dict[str, Any]) -> None:
-        """
-        Send JSON to everyone in a group.
-        If a socket fails, drop it.
-        """
+    async def send_personal(self, websocket: WebSocket, payload: dict):
+        await websocket.send_json(payload)
+
+    async def broadcast(self, group_id: int, payload: dict):
         dead = []
-        for uid, ws in list(self.groups.get(gid, {}).items()):
+
+        for websocket in list(self.active_connections.get(group_id, set())):
             try:
-                await ws.send_json(payload)
+                await websocket.send_json(payload)
             except Exception:
-                dead.append(uid)
+                dead.append(websocket)
 
-        for uid in dead:
-            self.disconnect(gid, uid)
-
-    async def send_to_user(self, gid: int, uid: int, payload: Dict[str, Any]) -> None:
-        ws = self.groups.get(gid, {}).get(uid)
-        if ws:
-            await ws.send_json(payload)
+        for websocket in dead:
+            self.disconnect(group_id, websocket)
 
 
 manager = ConnectionManager()
