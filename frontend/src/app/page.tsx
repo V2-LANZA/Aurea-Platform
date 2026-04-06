@@ -20,17 +20,12 @@ const benefitCards = [
   {
     title: "Why Use Aurea",
     text:
-      "Aurea helps identify grooming patterns while a conversation is still unfolding, so safeguarding teams can act with context instead of reacting too late.",
+      "Real-time signal detection, clearer moderation context, and a calmer interface built for youth safety workflows.",
   },
   {
     title: "Why Child Safety Matters",
     text:
-      "Children and teens often encounter manipulation through ordinary language, trust-building, secrecy, and requests for personal details. Early signal detection matters because harm usually starts quietly.",
-  },
-  {
-    title: "Bot Layer Coming Next",
-    text:
-      "We are building an assistant that can intervene inside the chat, reinforce safer boundaries, and support moderators with real-time context during risky exchanges.",
+      "Online harm often begins with subtle language, secrecy, and personal probing. Early context matters.",
   },
 ];
 
@@ -48,6 +43,21 @@ const carouselSlides = [
   {
     title: "Bot-assisted support",
     text: "Prepare for guided, in-chat safety prompts that can respond the moment harmful behaviour appears.",
+    image: "/slide-bot.svg",
+  },
+];
+
+const galleryPanels = [
+  {
+    title: "Live oversight",
+    image: "/slide-moderation.svg",
+  },
+  {
+    title: "Safer conversations",
+    image: "/slide-detection.svg",
+  },
+  {
+    title: "Human-centered support",
     image: "/slide-bot.svg",
   },
 ];
@@ -311,42 +321,38 @@ export default function HomePage() {
           </section>
 
           <section className="py-12 md:py-16">
-            <div className="grid w-full gap-8 lg:grid-cols-[1.1fr_.9fr]">
-              <div className="aurea-immersive-card">
-                <div className="aurea-story-eyebrow">Why early detection matters</div>
-                <h2 className="mt-3 max-w-2xl text-4xl font-semibold leading-tight text-[#FCF8F6] md:text-5xl">
-                  Grooming usually looks ordinary before it looks dangerous.
-                </h2>
-                <p className="mt-5 max-w-2xl text-lg leading-8 text-[#d5c3d3]">
-                  It can start with friendliness, then requests for privacy,
-                  personal details, or emotional dependence. That is why waiting
-                  for obvious evidence is rarely enough. Aurea focuses on
-                  identifying those subtle shifts sooner.
-                </p>
+            <div className="grid gap-6">
+              <div className="flex items-end justify-between gap-4">
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-[0.32em] text-[#B9929F]">
+                    Visual overview
+                  </div>
+                  <h2 className="mt-3 text-3xl font-semibold text-[#FCF8F6] md:text-4xl">
+                    A more minimal product story.
+                  </h2>
+                </div>
               </div>
 
-              <div className="grid gap-5">
-                <div className="aurea-side-card">
-                  <div className="aurea-side-title">Detection</div>
-                  <p className="aurea-side-copy">
-                    Real-time cues for secrecy, explicit asks, location probing,
-                    isolation language, and manipulative escalation.
-                  </p>
-                </div>
-                <div className="aurea-side-card">
-                  <div className="aurea-side-title">Moderation</div>
-                  <p className="aurea-side-copy">
-                    Structured alerts, review workflows, escalation paths, and
-                    user controls for fast intervention.
-                  </p>
-                </div>
-                <div className="aurea-side-card">
-                  <div className="aurea-side-title">Bot Response</div>
-                  <p className="aurea-side-copy">
-                    The upcoming bot will provide in-chat guidance and support a
-                    more immediate protective response around the user.
-                  </p>
-                </div>
+              <div className="grid gap-5 md:grid-cols-3">
+                {galleryPanels.map((panel) => (
+                  <div
+                    key={panel.title}
+                    className="overflow-hidden rounded-[32px] border border-white/10 bg-white/6 shadow-[0_18px_60px_rgba(0,0,0,0.18)] backdrop-blur-xl"
+                  >
+                    <div className="relative aspect-[4/5]">
+                      <Image
+                        src={panel.image}
+                        alt={panel.title}
+                        fill
+                        className="object-cover"
+                        sizes="(max-width: 768px) 100vw, 33vw"
+                      />
+                    </div>
+                    <div className="px-5 py-4 text-lg font-medium text-[#FCF8F6]">
+                      {panel.title}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           </section>

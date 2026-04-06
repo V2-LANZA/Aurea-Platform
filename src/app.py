@@ -42,13 +42,18 @@ app.add_middleware(
 @app.on_event("startup")
 def on_startup():
     Base.metadata.create_all(bind=engine)
-    _ensure_user_profile_columns()
+    _ensure_runtime_schema()
 
 
-def _ensure_user_profile_columns():
+def _ensure_runtime_schema():
     inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    if "users" not in tables:
+        return
+
     columns = {column["name"] for column in inspector.get_columns("users")}
     additions = {
+        "date_of_birth": "ALTER TABLE users ADD COLUMN date_of_birth DATE",
         "pronouns": "ALTER TABLE users ADD COLUMN pronouns VARCHAR(50)",
         "bio": "ALTER TABLE users ADD COLUMN bio TEXT",
         "avatar_url": "ALTER TABLE users ADD COLUMN avatar_url TEXT",
@@ -58,6 +63,20 @@ def _ensure_user_profile_columns():
         for column_name, statement in additions.items():
             if column_name not in columns:
                 connection.execute(text(statement))
+
+        if "user_group_states" in tables and "group_members" in tables:
+            connection.execute(
+                text(
+                    """
+                    INSERT INTO user_group_states (user_id, group_id)
+                    SELECT gm.user_id, gm.group_id
+                    FROM group_members gm
+                    LEFT JOIN user_group_states ugs
+                      ON ugs.user_id = gm.user_id AND ugs.group_id = gm.group_id
+                    WHERE ugs.id IS NULL
+                    """
+                )
+            )
 
 
 @app.get("/health")

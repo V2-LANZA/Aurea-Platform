@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional
 
 from pydantic import BaseModel
@@ -6,7 +6,8 @@ from pydantic import BaseModel
 
 class RegisterRequest(BaseModel):
     username: str
-    email: Optional[str] = None
+    email: str
+    date_of_birth: date
     full_name: Optional[str] = None
     pronouns: Optional[str] = None
     bio: Optional[str] = None
@@ -31,12 +32,30 @@ class UserOut(BaseModel):
     id: int
     username: str
     email: str
+    date_of_birth: Optional[date] = None
     full_name: Optional[str] = None
     pronouns: Optional[str] = None
     bio: Optional[str] = None
     avatar_url: Optional[str] = None
     role: str
     is_suspended: bool
+    is_available: bool = True
+
+    class Config:
+        from_attributes = True
+
+
+class PublicUserOut(BaseModel):
+    id: int
+    username: str
+    full_name: Optional[str] = None
+    pronouns: Optional[str] = None
+    bio: Optional[str] = None
+    avatar_url: Optional[str] = None
+    role: str
+    is_suspended: bool
+    is_available: bool = True
+    is_friend: bool = False
 
     class Config:
         from_attributes = True
@@ -63,7 +82,7 @@ class GroupOut(BaseModel):
     name: str
     invite_code: str
     member_count: Optional[int] = None
-    member_preview: list[UserOut] = []
+    member_preview: list[PublicUserOut] = []
 
     class Config:
         from_attributes = True
@@ -85,8 +104,24 @@ class MessageOut(BaseModel):
     full_name: Optional[str] = None
     pronouns: Optional[str] = None
     avatar_url: Optional[str] = None
+    sender_is_suspended: bool = False
+    sender_is_available: bool = True
     content: str
     created_at: datetime
+
+
+class FriendshipActionRequest(BaseModel):
+    friend_user_id: int
+
+
+class UnreadGroupCountOut(BaseModel):
+    group_id: int
+    unread_count: int
+
+
+class UnreadSummaryOut(BaseModel):
+    total_unread: int
+    groups: list[UnreadGroupCountOut]
 
 
 class AlertOut(BaseModel):

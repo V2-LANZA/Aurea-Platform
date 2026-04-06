@@ -5,8 +5,32 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { AvatarBadge } from "@/components/avatar-badge";
+import { SupportBotWidget } from "@/components/support-bot-widget";
 import { clearAuth, getRole, getUsername, isAuthed } from "@/lib/auth";
 import { usePathname, useRouter } from "next/navigation";
+
+function NavLink({
+  href,
+  label,
+  count,
+  linkBase,
+}: {
+  href: string;
+  label: string;
+  count?: number;
+  linkBase: string;
+}) {
+  return (
+    <Link href={href} className={`${linkBase} flex items-center gap-2`}>
+      <span>{label}</span>
+      {count && count > 0 ? (
+        <span className="rounded-full bg-[#F5D547] px-2 py-0.5 text-xs font-semibold text-[#0C0910]">
+          {count}
+        </span>
+      ) : null}
+    </Link>
+  );
+}
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -16,31 +40,66 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [role, setRole] = useState("user");
   const [authed, setAuthed] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [alertCount, setAlertCount] = useState(0);
+  const [chatCount, setChatCount] = useState(0);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      const syncProfile = async () => {
-        const loggedIn = isAuthed();
-        setAuthed(loggedIn);
-        if (loggedIn) {
-          try {
-            const res = await api.get("/users/me");
-            setAvatarUrl(res.data?.avatar_url || null);
-          } catch {
-            setAvatarUrl(null);
+    const syncProfile = async () => {
+      const loggedIn = isAuthed();
+      setAuthed(loggedIn);
+      if (loggedIn) {
+        try {
+          if (pathname.startsWith("/chat")) {
+            await api.post("/groups/read-all");
           }
-        } else {
-          setAvatarUrl(null);
-        }
-      };
 
+          const meRes = await api.get("/users/me");
+          setUsername(meRes.data?.username || "user");
+          setRole(meRes.data?.role || "user");
+          setAvatarUrl(meRes.data?.avatar_url || null);
+
+          const [unreadRes, alertsRes] = await Promise.allSettled([
+            api.get("/groups/unread-summary"),
+            api.get("/alerts"),
+          ]);
+
+          setChatCount(
+            unreadRes.status === "fulfilled"
+              ? Number(unreadRes.value.data?.total_unread || 0)
+              : 0
+          );
+          setAlertCount(
+            alertsRes.status === "fulfilled" && Array.isArray(alertsRes.value.data)
+              ? alertsRes.value.data.length
+              : 0
+          );
+        } catch {
+          setAvatarUrl(null);
+          setChatCount(0);
+          setAlertCount(0);
+        }
+      } else {
+        setAvatarUrl(null);
+        setChatCount(0);
+        setAlertCount(0);
+      }
+    };
+
+    const timer = window.setTimeout(() => {
       setMounted(true);
       setUsername(getUsername() || "user");
       setRole(getRole() || "user");
       void syncProfile();
     }, 0);
 
-    return () => window.clearTimeout(timer);
+    const interval = window.setInterval(() => {
+      void syncProfile();
+    }, 15000);
+
+    return () => {
+      window.clearTimeout(timer);
+      window.clearInterval(interval);
+    };
   }, [pathname]);
 
   function logout() {
@@ -78,18 +137,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </Link>
 
           <nav className="flex flex-wrap items-center gap-3">
-            <Link href="/" className={linkBase}>
-              Home
-            </Link>
-            <Link href="/groups" className={linkBase}>
-              Groups
-            </Link>
-            <Link href="/chat" className={linkBase}>
-              Chat
-            </Link>
-            <Link href="/alerts" className={linkBase}>
-              Alerts
-            </Link>
+            <NavLink href="/" label="Home" linkBase={linkBase} />
+            <NavLink href="/groups" label="Groups" linkBase={linkBase} />
+            <NavLink href="/chat" label="Chat" count={mounted && authed ? chatCount : 0} linkBase={linkBase} />
+            <NavLink href="/alerts" label="Alerts" count={mounted && authed ? alertCount : 0} linkBase={linkBase} />
 
             {mounted && authed && (
               <Link href="/profile" className={`${linkBase} flex items-center gap-3`}>
@@ -128,6 +179,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </header>
 
       <main>{children}</main>
+      {mounted && authed ? <SupportBotWidget /> : null}
     </div>
   );
 }

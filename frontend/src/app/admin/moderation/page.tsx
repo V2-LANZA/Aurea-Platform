@@ -225,15 +225,15 @@ export default function AdminModerationPage() {
         <div className="grid gap-8">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
-              <h1 className="text-4xl font-semibold tracking-tight text-[#0B132B]">
+              <h1 className="text-4xl font-semibold tracking-tight text-[#f5ecf8]">
                 Moderation Center
               </h1>
-              <p className="mt-1 text-sm text-[#3A506B]">{description}</p>
+              <p className="mt-1 text-sm text-[#dccfe3]">{description}</p>
             </div>
 
             <Button
               variant="outline"
-              className="rounded-2xl border-black/10 bg-white/80 px-5 shadow-sm"
+              className="rounded-2xl border-[#eadbed] bg-[#f6edf8] px-5 text-[#4f3e58] shadow-sm hover:bg-white"
               onClick={loadPage}
             >
               Refresh
@@ -249,16 +249,16 @@ export default function AdminModerationPage() {
                   className="block h-full cursor-pointer"
                   aria-label={`Open ${card.label}`}
                 >
-                  <Card className="h-full min-h-[180px] cursor-pointer rounded-3xl border border-slate-200 bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md">
+                  <Card className="h-full min-h-[180px] cursor-pointer rounded-3xl border border-[#eadbed] bg-[#f6edf8] shadow-sm transition-all hover:-translate-y-0.5 hover:bg-white hover:shadow-md">
                     <CardContent className="flex h-full flex-col justify-between p-6">
                       <div className="flex min-h-[3.5rem] items-start">
-                        <p className="line-clamp-2 text-base font-medium leading-6 text-slate-500">
+                        <p className="line-clamp-2 text-base font-medium leading-6 text-[#755b7f]">
                           {card.label}
                         </p>
                       </div>
 
                       <div className="flex flex-1 items-end">
-                        <p className="text-4xl font-semibold tracking-tight text-slate-900">
+                        <p className={`${typeof card.value === "string" ? "text-2xl" : "text-4xl"} font-semibold tracking-tight text-[#2b1533]`}>
                           {card.value}
                         </p>
                       </div>
@@ -276,8 +276,8 @@ export default function AdminModerationPage() {
                 href={item.href}
                 className={`rounded-full border px-4 py-2 text-sm font-medium transition ${
                   item.active
-                    ? "border-[#0B132B] bg-[#0B132B] text-white"
-                    : "border-black/10 bg-white text-[#0B132B] hover:bg-[#F8FAFC]"
+                    ? "border-[#5f4674] bg-[#5f4674] text-white"
+                    : "border-[#eadbed] bg-[#f6edf8] text-[#4f3e58] hover:bg-white"
                 }`}
               >
                 {item.label}
@@ -285,31 +285,31 @@ export default function AdminModerationPage() {
             ))}
           </div>
 
-          <Card className="rounded-[28px] border border-black/5 bg-white/90 shadow-sm">
-            <CardContent className="grid gap-4 p-6">
+          <Card className="rounded-[28px] border border-[#eadbed] bg-[#f6edf8] shadow-sm">
+            <CardContent className="grid max-h-[72vh] gap-4 overflow-y-auto p-6 pr-4">
               <div>
-                <div className="text-2xl font-semibold text-[#0B132B]">{heading}</div>
-                <div className="mt-1 text-sm text-[#3A506B]">
+                <div className="text-2xl font-semibold text-[#2b1533]">{heading}</div>
+                <div className="mt-1 text-sm text-[#6d5a75]">
                   Each message shows who sent it and the group where it was posted. This app does not track a single recipient, because these are group messages.
                 </div>
               </div>
 
               {loading ? (
-                <div className="text-[#3A506B]">Loading moderation data...</div>
+                <div className="text-[#6d5a75]">Loading moderation data...</div>
               ) : alerts.length === 0 ? (
-                <div className="rounded-[24px] border border-dashed border-black/10 bg-[#F8FAFC] p-6 text-[#3A506B]">
+                <div className="rounded-[24px] border border-dashed border-[#dbc8df] bg-white p-6 text-[#6d5a75]">
                   No messages match the current filter.
                 </div>
               ) : (
                 alerts.map((alert) => (
                   <div
                     key={alert.id}
-                    className="rounded-[24px] border border-black/5 bg-white p-5 shadow-sm"
+                    className="rounded-[24px] border border-[#e0d1e4] bg-white p-5 shadow-sm"
                   >
                     <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                       <div className="grid gap-3">
                         <div className="flex flex-wrap items-center gap-2">
-                          <div className="text-lg font-semibold text-[#0B132B]">
+                          <div className="text-lg font-semibold text-[#2b1533]">
                             Alert #{alert.id}
                           </div>
                           <div
@@ -328,36 +328,36 @@ export default function AdminModerationPage() {
                           </div>
                         </div>
 
-                        <div className="grid gap-1 text-sm text-[#3A506B]">
+                        <div className="grid gap-1 text-sm text-[#6d5a75]">
                           <div>
                             Sender:{" "}
-                            <span className="font-medium text-[#0B132B]">
+                            <span className="font-medium text-[#2b1533]">
                               {alert.sender_display_name || alert.sender_username}
                             </span>
                             {alert.sender_email ? ` · ${alert.sender_email}` : ""}
                           </div>
                           <div>
                             Username:{" "}
-                            <span className="font-medium text-[#0B132B]">
+                            <span className="font-medium text-[#2b1533]">
                               @{alert.sender_username || "unknown"}
                             </span>
                           </div>
                           <div>
                             Group:{" "}
-                            <span className="font-medium text-[#0B132B]">
+                            <span className="font-medium text-[#2b1533]">
                               {alert.group_name || `Group ${alert.group_id}`}
                             </span>
                           </div>
                           <div>
                             Sent:{" "}
-                            <span className="font-medium text-[#0B132B]">
+                            <span className="font-medium text-[#2b1533]">
                               {formatDate(alert.message_created_at || alert.created_at)}
                             </span>
                           </div>
                           {alert.reviewed_by_username && (
                             <div>
                               Reviewed by:{" "}
-                              <span className="font-medium text-[#0B132B]">
+                              <span className="font-medium text-[#2b1533]">
                                 {alert.reviewed_by_username}
                               </span>
                             </div>
@@ -392,7 +392,7 @@ export default function AdminModerationPage() {
                         </Button>
                         {alert.sender_user_id && (
                           <Button
-                            className="rounded-2xl bg-[#0B132B] text-white hover:bg-[#1C2541]"
+                            className="rounded-2xl bg-[#5f4674] text-white hover:bg-[#72588a]"
                             disabled={busyKey !== null}
                             onClick={() => toggleSuspend(alert)}
                           >
@@ -407,30 +407,30 @@ export default function AdminModerationPage() {
                     </div>
 
                     <div className="mt-4 grid gap-4 lg:grid-cols-[1.5fr_1fr]">
-                      <div className="rounded-[20px] bg-[#F8FAFC] p-4">
-                        <div className="text-sm font-semibold uppercase tracking-wide text-[#3A506B]">
+                      <div className="rounded-[20px] bg-[#f8f2fa] p-4">
+                        <div className="text-sm font-semibold uppercase tracking-wide text-[#7d6783]">
                           Message
                         </div>
-                        <p className="mt-2 whitespace-pre-wrap text-base leading-7 text-[#0B132B]">
+                        <p className="mt-2 max-h-56 overflow-y-auto whitespace-pre-wrap text-base leading-7 text-[#2b1533]">
                           {alert.message_content || alert.trigger_text || "Message content unavailable."}
                         </p>
                       </div>
 
                       <div className="grid gap-3">
-                        <div className="rounded-[20px] bg-[#F8FAFC] p-4">
-                          <div className="text-sm font-semibold uppercase tracking-wide text-[#3A506B]">
+                        <div className="rounded-[20px] bg-[#f8f2fa] p-4">
+                          <div className="text-sm font-semibold uppercase tracking-wide text-[#7d6783]">
                             Why it was flagged
                           </div>
-                          <p className="mt-2 text-sm leading-6 text-[#0B132B]">
+                          <p className="mt-2 max-h-36 overflow-y-auto text-sm leading-6 text-[#2b1533]">
                             {alert.matched_reasons || alert.detail}
                           </p>
                         </div>
 
-                        <div className="rounded-[20px] bg-[#F8FAFC] p-4">
-                          <div className="text-sm font-semibold uppercase tracking-wide text-[#3A506B]">
+                        <div className="rounded-[20px] bg-[#f8f2fa] p-4">
+                          <div className="text-sm font-semibold uppercase tracking-wide text-[#7d6783]">
                             Admin note
                           </div>
-                          <p className="mt-2 text-sm leading-6 text-[#0B132B]">
+                          <p className="mt-2 max-h-32 overflow-y-auto text-sm leading-6 text-[#2b1533]">
                             {alert.admin_note || "No admin note yet."}
                           </p>
                         </div>

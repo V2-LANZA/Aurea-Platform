@@ -1,6 +1,7 @@
 import os
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ..auth import create_access_token, hash_password, verify_password
@@ -16,35 +17,32 @@ ADMIN_SETUP_KEY = os.getenv("ADMIN_SETUP_KEY", "Charizard")
 @router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
 def register(payload: RegisterRequest, db: Session = Depends(get_db)):
     username = payload.username.strip()
-    email = payload.email.strip().lower() if payload.email else ""
+    username_lookup = username.lower()
+    email = payload.email.strip().lower()
     full_name = payload.full_name.strip() if payload.full_name else None
     pronouns = payload.pronouns.strip() if payload.pronouns else None
     bio = payload.bio.strip() if payload.bio else None
     avatar_url = payload.avatar_url.strip() if payload.avatar_url else None
     password = payload.password
+    date_of_birth = payload.date_of_birth
 
-    if not username or not password:
+    if not username or not password or not email:
         raise HTTPException(
             status_code=400,
-            detail="Username and password are required",
+            detail="Username, email, date of birth, and password are required",
         )
 
     if email and "@" not in email:
         raise HTTPException(status_code=400, detail="Please enter a valid email")
 
-    if not email:
-        base_email = f"{username.lower()}@aurea.local"
-        email = base_email
-        suffix = 1
-        while db.query(User).filter(User.email == email).first():
-            suffix += 1
-            email = f"{username.lower()}{suffix}@aurea.local"
+    if len(username) < 3:
+        raise HTTPException(status_code=400, detail="Username must be at least 3 characters")
 
-    existing_username = db.query(User).filter(User.username == username).first()
+    existing_username = db.query(User).filter(func.lower(User.username) == username_lookup).first()
     if existing_username:
         raise HTTPException(status_code=400, detail="Username already exists")
 
-    existing_email = db.query(User).filter(User.email == email).first()
+    existing_email = db.query(User).filter(func.lower(User.email) == email).first()
     if existing_email:
         raise HTTPException(status_code=400, detail="Email already exists")
 
@@ -55,6 +53,7 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
     user = User(
         username=username,
         email=email,
+        date_of_birth=date_of_birth,
         full_name=full_name,
         pronouns=pronouns,
         bio=bio,
@@ -74,7 +73,7 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
     username = payload.username.strip()
     password = payload.password
 
-    user = db.query(User).filter(User.username == username).first()
+    user = db.query(User).filter(func.lower(User.username) == username.lower()).first()
     if not user or not verify_password(password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid username or password")
 

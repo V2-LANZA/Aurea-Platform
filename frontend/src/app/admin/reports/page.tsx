@@ -297,33 +297,33 @@ export default function AdminReportsPage() {
         <div className="grid gap-8">
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
-              <h1 className="text-4xl font-semibold tracking-tight text-[#0B132B]">
-                Reports
+              <h1 className="text-4xl font-semibold tracking-tight text-[#f5ecf8]">
+                <span className="text-[#f5ecf8]">Reports</span>
               </h1>
-              <p className="mt-1 text-sm text-[#3A506B]">
+              <p className="mt-1 text-sm text-[#dccfe3]">
                 Generate a quick visual snapshot and export CSV files for incidents, users, groups, and summary reporting.
               </p>
             </div>
 
             <Button
               variant="outline"
-              className="rounded-2xl border-black/10 bg-white/80 px-5 shadow-sm"
+              className="rounded-2xl border-[#eadbed] bg-[#f6edf8] px-5 text-[#4f3e58] shadow-sm hover:bg-white"
               onClick={loadReports}
             >
               Refresh
             </Button>
           </div>
 
-          <Card className="rounded-[28px] border border-black/5 bg-white/90 shadow-sm">
+          <Card className="rounded-[28px] border border-[#eadbed] bg-[#f6edf8] shadow-sm">
             <CardHeader>
-              <CardTitle className="text-2xl font-semibold text-[#0B132B]">
+              <CardTitle className="text-2xl font-semibold text-[#2b1533]">
                 Exportable report files
               </CardTitle>
             </CardHeader>
 
             <CardContent className="flex flex-wrap gap-3">
               <Button
-                className="rounded-2xl bg-[#0B132B] text-white hover:bg-[#1C2541]"
+                className="rounded-2xl bg-[#5f4674] text-white hover:bg-[#72588a]"
                 disabled={loading || !dashboard}
                 onClick={exportSummaryReport}
               >
@@ -331,7 +331,7 @@ export default function AdminReportsPage() {
               </Button>
               <Button
                 variant="outline"
-                className="rounded-2xl"
+                className="rounded-2xl border-[#eadbed] bg-white text-[#4f3e58] hover:bg-[#fbf6fc]"
                 disabled={loading}
                 onClick={exportIncidentReport}
               >
@@ -339,7 +339,7 @@ export default function AdminReportsPage() {
               </Button>
               <Button
                 variant="outline"
-                className="rounded-2xl"
+                className="rounded-2xl border-[#eadbed] bg-white text-[#4f3e58] hover:bg-[#fbf6fc]"
                 disabled={loading}
                 onClick={exportUsersReport}
               >
@@ -347,7 +347,7 @@ export default function AdminReportsPage() {
               </Button>
               <Button
                 variant="outline"
-                className="rounded-2xl"
+                className="rounded-2xl border-[#eadbed] bg-white text-[#4f3e58] hover:bg-[#fbf6fc]"
                 disabled={loading}
                 onClick={exportGroupsReport}
               >
@@ -357,22 +357,22 @@ export default function AdminReportsPage() {
           </Card>
 
           <div className="grid gap-8 xl:grid-cols-[1.2fr_.8fr]">
-            <Card className="rounded-[28px] border border-black/5 bg-white/90 shadow-sm">
+            <Card className="rounded-[28px] border border-[#eadbed] bg-[#f6edf8] shadow-sm">
               <CardHeader>
-                <CardTitle className="text-2xl font-semibold text-[#0B132B]">
+                <CardTitle className="text-2xl font-semibold text-[#2b1533]">
                   Moderation activity chart
                 </CardTitle>
               </CardHeader>
 
-              <CardContent>
+              <CardContent className="max-h-[70vh] overflow-y-auto pr-2">
                 {loading ? (
-                  <div className="text-[#3A506B]">Loading chart...</div>
+                  <div className="text-[#6d5a75]">Loading chart...</div>
                 ) : (
                   <div className="grid gap-4">
-                    <div className="grid min-h-[260px] grid-cols-5 items-end gap-4 rounded-[24px] bg-[#F8FAFC] p-6">
+                    <div className="grid min-h-[260px] grid-cols-5 items-end gap-4 rounded-[24px] bg-white p-6">
                       {chartItems.map((item) => (
                         <div key={item.label} className="flex h-full flex-col justify-end gap-3">
-                          <div className="flex justify-center text-sm font-semibold text-[#0B132B]">
+                          <div className="flex justify-center text-sm font-semibold text-[#2b1533]">
                             {item.value}
                           </div>
                           <div
@@ -381,14 +381,14 @@ export default function AdminReportsPage() {
                               height: `${Math.max((item.value / maxChartValue) * 180, 14)}px`,
                             }}
                           />
-                          <div className="text-center text-xs font-medium uppercase tracking-wide text-[#3A506B]">
+                          <div className="text-center text-xs font-medium uppercase tracking-wide text-[#7d6783]">
                             {item.label}
                           </div>
                         </div>
                       ))}
                     </div>
 
-                    <div className="text-sm text-[#3A506B]">
+                    <div className="text-sm text-[#6d5a75]">
                       This quick chart gives you a report-friendly picture of the current moderation load.
                     </div>
                   </div>
@@ -396,29 +396,29 @@ export default function AdminReportsPage() {
               </CardContent>
             </Card>
 
-            <Card className="rounded-[28px] border border-black/5 bg-white/90 shadow-sm">
+            <Card className="rounded-[28px] border border-[#eadbed] bg-[#f6edf8] shadow-sm">
               <CardHeader>
-                <CardTitle className="text-2xl font-semibold text-[#0B132B]">
+                <CardTitle className="text-2xl font-semibold text-[#2b1533]">
                   Snapshot
                 </CardTitle>
               </CardHeader>
 
-              <CardContent className="grid gap-3">
-                <div className="rounded-[22px] bg-[#F8FAFC] p-4">
-                  <div className="text-sm text-[#3A506B]">Reviewed cases</div>
-                  <div className="text-3xl font-semibold text-[#0B132B]">{reviewedCount}</div>
+              <CardContent className="grid max-h-[70vh] gap-3 overflow-y-auto pr-2">
+                <div className="rounded-[22px] bg-white p-4">
+                  <div className="text-sm text-[#7d6783]">Reviewed cases</div>
+                  <div className="text-3xl font-semibold text-[#2b1533]">{reviewedCount}</div>
                 </div>
-                <div className="rounded-[22px] bg-[#F8FAFC] p-4">
-                  <div className="text-sm text-[#3A506B]">Dismissed cases</div>
-                  <div className="text-3xl font-semibold text-[#0B132B]">{dismissedCount}</div>
+                <div className="rounded-[22px] bg-white p-4">
+                  <div className="text-sm text-[#7d6783]">Dismissed cases</div>
+                  <div className="text-3xl font-semibold text-[#2b1533]">{dismissedCount}</div>
                 </div>
-                <div className="rounded-[22px] bg-[#F8FAFC] p-4">
-                  <div className="text-sm text-[#3A506B]">Medium risk messages</div>
-                  <div className="text-3xl font-semibold text-[#0B132B]">{mediumRiskCount}</div>
+                <div className="rounded-[22px] bg-white p-4">
+                  <div className="text-sm text-[#7d6783]">Medium risk messages</div>
+                  <div className="text-3xl font-semibold text-[#2b1533]">{mediumRiskCount}</div>
                 </div>
-                <div className="rounded-[22px] bg-[#F8FAFC] p-4">
-                  <div className="text-sm text-[#3A506B]">Latest incident</div>
-                  <div className="mt-1 text-sm font-medium text-[#0B132B]">
+                <div className="rounded-[22px] bg-white p-4">
+                  <div className="text-sm text-[#7d6783]">Latest incident</div>
+                  <div className="mt-1 text-sm font-medium text-[#2b1533]">
                     {alerts[0] ? formatDate(alerts[0].created_at) : "No incidents yet"}
                   </div>
                 </div>
@@ -427,26 +427,26 @@ export default function AdminReportsPage() {
           </div>
 
           <div className="grid gap-8 xl:grid-cols-[1fr_1fr]">
-            <Card className="rounded-[28px] border border-black/5 bg-white/90 shadow-sm">
+            <Card className="rounded-[28px] border border-[#eadbed] bg-[#f6edf8] shadow-sm">
               <CardHeader>
-                <CardTitle className="text-2xl font-semibold text-[#0B132B]">
+                <CardTitle className="text-2xl font-semibold text-[#2b1533]">
                   Most common reasons
                 </CardTitle>
               </CardHeader>
 
-              <CardContent className="grid gap-3">
+              <CardContent className="grid max-h-[70vh] gap-3 overflow-y-auto pr-2">
                 {loading ? (
-                  <div className="text-[#3A506B]">Loading reasons...</div>
+                  <div className="text-[#6d5a75]">Loading reasons...</div>
                 ) : reasonEntries.length === 0 ? (
-                  <div className="text-[#3A506B]">No flagged reasons available yet.</div>
+                  <div className="text-[#6d5a75]">No flagged reasons available yet.</div>
                 ) : (
                   reasonEntries.map(([reason, count]) => (
                     <div
                       key={reason}
-                      className="flex items-center justify-between rounded-[20px] bg-[#F8FAFC] p-4"
+                      className="flex items-center justify-between rounded-[20px] bg-white p-4"
                     >
-                      <div className="pr-4 text-sm font-medium text-[#0B132B]">{reason}</div>
-                      <div className="rounded-full bg-white px-3 py-1 text-sm font-semibold text-[#0B132B]">
+                      <div className="pr-4 text-sm font-medium text-[#2b1533]">{reason}</div>
+                      <div className="rounded-full bg-[#f1e2f4] px-3 py-1 text-sm font-semibold text-[#5f4674]">
                         {count}
                       </div>
                     </div>
@@ -455,40 +455,40 @@ export default function AdminReportsPage() {
               </CardContent>
             </Card>
 
-            <Card className="rounded-[28px] border border-black/5 bg-white/90 shadow-sm">
+            <Card className="rounded-[28px] border border-[#eadbed] bg-[#f6edf8] shadow-sm">
               <CardHeader>
-                <CardTitle className="text-2xl font-semibold text-[#0B132B]">
+                <CardTitle className="text-2xl font-semibold text-[#2b1533]">
                   Report preview
                 </CardTitle>
               </CardHeader>
 
-              <CardContent className="grid gap-3">
+              <CardContent className="grid max-h-[70vh] gap-3 overflow-y-auto pr-2">
                 {loading ? (
-                  <div className="text-[#3A506B]">Loading preview...</div>
+                  <div className="text-[#6d5a75]">Loading preview...</div>
                 ) : alerts.length === 0 ? (
-                  <div className="text-[#3A506B]">No incidents to preview yet.</div>
+                  <div className="text-[#6d5a75]">No incidents to preview yet.</div>
                 ) : (
                   alerts.slice(0, 3).map((alert) => (
                     <div
                       key={alert.id}
-                      className="rounded-[20px] border border-black/5 bg-[#F8FAFC] p-4"
+                      className="rounded-[20px] border border-[#eadbed] bg-white p-4"
                     >
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="font-semibold text-[#0B132B]">
+                        <div className="font-semibold text-[#2b1533]">
                           Alert #{alert.id} · {alert.group_name || `Group ${alert.group_id}`}
                         </div>
-                        <div className="text-xs text-[#3A506B]">{formatDate(alert.created_at)}</div>
+                        <div className="text-xs text-[#7d6783]">{formatDate(alert.created_at)}</div>
                       </div>
-                      <div className="mt-2 text-sm text-[#3A506B]">
+                      <div className="mt-2 text-sm text-[#6d5a75]">
                         Sender:{" "}
-                        <span className="font-medium text-[#0B132B]">
+                        <span className="font-medium text-[#2b1533]">
                           {alert.sender_display_name || alert.sender_username}
                         </span>
                       </div>
-                      <div className="mt-2 text-sm text-[#0B132B]">
+                      <div className="mt-2 text-sm text-[#2b1533]">
                         {alert.message_content || alert.trigger_text}
                       </div>
-                      <div className="mt-3 text-xs text-[#3A506B]">
+                      <div className="mt-3 text-xs text-[#7d6783]">
                         Reason: {alert.matched_reasons || alert.detail}
                       </div>
                     </div>

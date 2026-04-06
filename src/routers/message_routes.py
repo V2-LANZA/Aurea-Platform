@@ -35,10 +35,12 @@ def _to_message_out(m: Message) -> MessageOut:
         id=m.id,
         group_id=m.group_id,
         user_id=m.user_id,
-        username=_display_name(m.user),
+        username=m.user.username if m.user else "unknown",
         full_name=m.user.full_name if m.user else None,
         pronouns=m.user.pronouns if m.user else None,
         avatar_url=m.user.avatar_url if m.user else None,
+        sender_is_suspended=m.user.is_suspended if m.user else False,
+        sender_is_available=not m.user.is_suspended if m.user else True,
         content=m.content,
         created_at=m.created_at,
     )

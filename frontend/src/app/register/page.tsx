@@ -28,6 +28,8 @@ export default function RegisterPage() {
   const router = useRouter();
 
   const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
+  const [dateOfBirth, setDateOfBirth] = useState("");
   const [fullName, setFullName] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -38,8 +40,8 @@ export default function RegisterPage() {
   async function onSubmit() {
     setErr(null);
 
-    if (!username.trim() || !password.trim()) {
-      setErr("Please fill in username and password.");
+    if (!username.trim() || !email.trim() || !dateOfBirth || !password.trim()) {
+      setErr("Please fill in username, email, date of birth, and password.");
       return;
     }
 
@@ -52,14 +54,16 @@ export default function RegisterPage() {
 
     try {
       await api.post(REGISTER_PATH, {
-        username: username.trim(),
+        username: username.trim().toLowerCase(),
+        email: email.trim().toLowerCase(),
+        date_of_birth: dateOfBirth,
         full_name: fullName.trim() || null,
         password,
         admin_setup_key: adminSetupKey.trim() || null,
       });
 
       const loginRes = await api.post(LOGIN_PATH, {
-        username: username.trim(),
+        username: username.trim().toLowerCase(),
         password,
       });
 
@@ -101,7 +105,31 @@ export default function RegisterPage() {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 className="rounded-2xl border-white/10 bg-white/5 text-white placeholder:text-[#8f7d8f]"
+                placeholder="Choose a unique username"
               />
+            </div>
+
+            <div className="grid gap-5 md:grid-cols-2">
+              <div className="space-y-2">
+                <div className="text-sm text-[#E2C2C6]">Email</div>
+                <Input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="rounded-2xl border-white/10 bg-white/5 text-white placeholder:text-[#8f7d8f]"
+                  placeholder="name@example.com"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <div className="text-sm text-[#E2C2C6]">Date of birth</div>
+                <Input
+                  type="date"
+                  value={dateOfBirth}
+                  onChange={(e) => setDateOfBirth(e.target.value)}
+                  className="rounded-2xl border-white/10 bg-white/5 text-white placeholder:text-[#8f7d8f]"
+                />
+              </div>
             </div>
 
             <div className="space-y-2">

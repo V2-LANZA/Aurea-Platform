@@ -1,4 +1,15 @@
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import (
+    Boolean,
+    Column,
+    Date,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import relationship
 
 from .db import Base
@@ -10,6 +21,7 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String(50), unique=True, index=True, nullable=False)
     email = Column(String(255), unique=True, index=True, nullable=False)
+    date_of_birth = Column(Date, nullable=True)
     full_name = Column(String(120), nullable=True)
     pronouns = Column(String(50), nullable=True)
     bio = Column(Text, nullable=True)
@@ -23,6 +35,11 @@ class User(Base):
 
     memberships = relationship("GroupMember", back_populates="user", cascade="all, delete-orphan")
     messages = relationship("Message", back_populates="user", cascade="all, delete-orphan")
+    group_states = relationship("UserGroupState", back_populates="user", cascade="all, delete-orphan")
+
+    @property
+    def is_available(self):
+        return not self.is_suspended
 
 
 class Group(Base):
@@ -65,6 +82,37 @@ class Message(Base):
 
     group = relationship("Group", back_populates="messages")
     user = relationship("User", back_populates="messages")
+
+
+class UserGroupState(Base):
+    __tablename__ = "user_group_states"
+    __table_args__ = (
+        UniqueConstraint("user_id", "group_id", name="uq_user_group_state"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    group_id = Column(Integer, ForeignKey("groups.id"), nullable=False, index=True)
+    last_read_message_id = Column(Integer, ForeignKey("messages.id"), nullable=True)
+    last_read_at = Column(DateTime(timezone=True), nullable=True)
+
+    user = relationship("User", back_populates="group_states")
+    group = relationship("Group")
+
+
+class Friendship(Base):
+    __tablename__ = "friendships"
+    __table_args__ = (
+        UniqueConstraint("user_id", "friend_id", name="uq_friendship_pair"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    friend_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    user = relationship("User", foreign_keys=[user_id])
+    friend = relationship("User", foreign_keys=[friend_id])
 
 
 class Alert(Base):

@@ -76,16 +76,11 @@ async def chat_socket(websocket: WebSocket, group_id: int):
         if not user or not member:
             await websocket.close(code=4403, reason="Not a member of this group")
             return
+        if user.is_suspended:
+            await websocket.close(code=4403, reason="Your account is suspended")
+            return
 
         await manager.connect(group_id, websocket)
-
-        await manager.send_personal(
-            websocket,
-            {
-                "type": "system",
-                "detail": f"Connected to group {group_id}",
-            },
-        )
 
         while True:
             raw = await websocket.receive_text()
@@ -93,6 +88,11 @@ async def chat_socket(websocket: WebSocket, group_id: int):
 
             if not content:
                 continue
+
+            db.refresh(user)
+            if user.is_suspended:
+                await websocket.close(code=4403, reason="Your account is suspended")
+                return
 
             message = Message(
                 group_id=group_id,
@@ -104,6 +104,7 @@ async def chat_socket(websocket: WebSocket, group_id: int):
             db.refresh(message)
 
             score, reasons = analyze(content)
+            bot_text = build_bot_reply(content, score, reasons)
 
             await manager.broadcast(
                 group_id,
@@ -112,10 +113,12 @@ async def chat_socket(websocket: WebSocket, group_id: int):
                     "id": message.id,
                     "group_id": group_id,
                     "user_id": user.id,
-                    "username": _display_name(user),
+                    "username": user.username,
                     "full_name": user.full_name,
                     "pronouns": user.pronouns,
                     "avatar_url": user.avatar_url,
+                    "sender_is_suspended": user.is_suspended,
+                    "sender_is_available": not user.is_suspended,
                     "content": message.content,
                     "created_at": message.created_at.isoformat() if message.created_at else None,
                 },
@@ -136,34 +139,35 @@ async def chat_socket(websocket: WebSocket, group_id: int):
                 db.add(alert)
                 db.commit()
 
-                bot_text = build_bot_reply(content, score, reasons)
-                if bot_text:
-                    bot_user = _get_or_create_bot_user(db)
+            if bot_text:
+                bot_user = _get_or_create_bot_user(db)
 
-                    bot_message = Message(
-                        group_id=group_id,
-                        user_id=bot_user.id,
-                        content=bot_text,
-                    )
-                    db.add(bot_message)
-                    db.commit()
-                    db.refresh(bot_message)
+                bot_message = Message(
+                    group_id=group_id,
+                    user_id=bot_user.id,
+                    content=bot_text,
+                )
+                db.add(bot_message)
+                db.commit()
+                db.refresh(bot_message)
 
-                    await manager.broadcast(
-                        group_id,
-                        {
-                            "type": "bot",
-                            "id": bot_message.id,
-                            "group_id": group_id,
-                            "user_id": bot_user.id,
-                            "username": _display_name(bot_user),
-                            "full_name": bot_user.full_name,
-                            "pronouns": bot_user.pronouns,
-                            "avatar_url": bot_user.avatar_url,
-                            "content": bot_message.content,
-                            "created_at": bot_message.created_at.isoformat() if bot_message.created_at else None,
-                        },
-                    )
+                await manager.broadcast(
+                    group_id,
+                    {
+                        "type": "bot",
+                        "id": bot_message.id,
+                        "group_id": group_id,
+                        "user_id": bot_user.id,
+                        "username": bot_user.username,
+                        "full_name": bot_user.full_name,
+                        "pronouns": bot_user.pronouns,
+                        "avatar_url": bot_user.avatar_url,
+                        "sender_is_suspended": False,
+                        "sender_is_available": True,
+                        "content": bot_message.content,
+                        "created_at": bot_message.created_at.isoformat() if bot_message.created_at else None,
+                    },
+                )
 
     except WebSocketDisconnect:
         manager.disconnect(group_id, websocket)

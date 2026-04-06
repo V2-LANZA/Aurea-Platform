@@ -166,7 +166,7 @@ export default function AdminPage() {
   if (loading) {
     return (
       <AppShell>
-        <div className="mx-auto max-w-6xl px-6 py-10 text-[#d2bfd0]">
+        <div className="mx-auto max-w-6xl px-6 py-10 text-[#4f3e58]">
           Loading admin dashboard...
         </div>
       </AppShell>
@@ -193,7 +193,7 @@ export default function AdminPage() {
               <h1 className="text-4xl font-semibold tracking-tight text-[#FCF8F6]">
                 Admin Dashboard
               </h1>
-              <p className="mt-1 text-sm text-[#d2bfd0]">
+              <p className="mt-1 text-sm text-[#ead8ea]">
                 Monitor alerts, users, and moderation activity.
               </p>
             </div>
@@ -216,16 +216,16 @@ export default function AdminPage() {
                   className="block h-full cursor-pointer"
                   aria-label={`Open ${card.label}`}
                 >
-                  <Card className="h-full min-h-[180px] cursor-pointer rounded-3xl border border-white/10 bg-white/6 shadow-sm transition-all hover:-translate-y-0.5 hover:bg-white/10 hover:shadow-md">
+                  <Card className="h-full min-h-[180px] cursor-pointer rounded-3xl border border-[#d8bfd8] bg-[#f3e6f4] shadow-sm transition-all hover:-translate-y-0.5 hover:bg-[#f8edf8] hover:shadow-md">
                     <CardContent className="flex h-full flex-col justify-between p-6">
                       <div className="flex min-h-[3.5rem] items-start">
-                        <p className="line-clamp-2 text-base font-medium leading-6 text-[#B9929F]">
+                        <p className="line-clamp-2 text-base font-medium leading-6 text-[#6c4f71]">
                           {card.label}
                         </p>
                       </div>
 
                       <div className="flex flex-1 items-end">
-                        <p className="text-4xl font-semibold tracking-tight text-[#FCF8F6]">
+                        <p className={`${typeof card.value === "string" ? "text-2xl" : "text-4xl"} font-semibold tracking-tight text-[#2b1533]`}>
                           {card.value}
                         </p>
                       </div>
@@ -236,30 +236,50 @@ export default function AdminPage() {
             </div>
           )}
 
+          <Card className="rounded-[28px] border border-[#d8bfd8] bg-[#f3e6f4] shadow-sm">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-xl font-semibold text-[#2b1533]">
+                Admin Guide
+              </CardTitle>
+            </CardHeader>
+
+            <CardContent className="grid gap-3 text-sm text-[#4f3e58]">
+              <div className="rounded-2xl bg-white/70 px-4 py-3">
+                Example grooming cues: “don’t tell your parents”, “send me a picture”, “where do you live”, “meet me alone”.
+              </div>
+              <div className="rounded-2xl bg-white/70 px-4 py-3">
+                Example abuse cues: “kill yourself”, “fuck you”, “I hate you”, threats, slurs, or repeated humiliation.
+              </div>
+              <div className="rounded-2xl bg-white/70 px-4 py-3">
+                Quick workflow: review the message, inspect the sender, escalate if serious, and suspend only when the behavior clearly puts others at risk.
+              </div>
+            </CardContent>
+          </Card>
+
 
           <div className="grid gap-8 xl:grid-cols-[1.4fr_.9fr]">
-            <Card className="rounded-[28px] border border-white/10 bg-white/6 shadow-sm">
+            <Card className="rounded-[28px] border border-[#d8bfd8] bg-[#f3e6f4] shadow-sm">
               <CardHeader className="pb-2">
-                <CardTitle className="text-xl font-semibold text-[#FCF8F6]">
+                <CardTitle className="text-xl font-semibold text-[#2b1533]">
                   Moderation Queue
                 </CardTitle>
               </CardHeader>
 
-              <CardContent className="grid gap-4">
+              <CardContent className="grid max-h-[70vh] gap-4 overflow-y-auto pr-2">
                 {alerts.length === 0 ? (
-                  <div className="text-[#d2bfd0]">No alerts available.</div>
+                  <div className="text-[#4f3e58]">No alerts available.</div>
                 ) : (
                   alerts.map((alert) => (
                     <div
                       key={alert.id}
-                      className="rounded-[24px] border border-white/10 bg-white/5 p-5 shadow-sm"
+                      className="rounded-[24px] border border-[#dec9e0] bg-white/70 p-5 shadow-sm"
                     >
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
-                          <div className="text-lg font-semibold text-[#FCF8F6]">
+                          <div className="text-lg font-semibold text-[#2b1533]">
                             Alert #{alert.id}
                           </div>
-                          <div className="mt-1 text-sm text-[#d2bfd0]">
+                          <div className="mt-1 text-sm text-[#6b5b73]">
                             Sender: {alert.sender_username} · Group ID: {alert.group_id}
                           </div>
                         </div>
@@ -283,21 +303,21 @@ export default function AdminPage() {
                       </div>
 
                       <div className="mt-4 grid gap-3">
-                        <div className="rounded-2xl bg-[#120E16] px-4 py-3">
-                          <div className="text-xs font-medium uppercase tracking-wide text-[#B9929F]">
+                        <div className="rounded-2xl bg-white px-4 py-3">
+                          <div className="text-xs font-medium uppercase tracking-wide text-[#8b5f92]">
                             Trigger message
                           </div>
-                          <div className="mt-1 text-[#FCF8F6]">{alert.trigger_text}</div>
+                          <div className="mt-1 text-[#2b1533]">{alert.trigger_text}</div>
                         </div>
 
-                        <div className="rounded-2xl bg-[#120E16] px-4 py-3">
-                          <div className="text-xs font-medium uppercase tracking-wide text-[#B9929F]">
+                        <div className="rounded-2xl bg-white px-4 py-3">
+                          <div className="text-xs font-medium uppercase tracking-wide text-[#8b5f92]">
                             Why flagged
                           </div>
-                          <div className="mt-1 text-[#FCF8F6]">{alert.detail}</div>
+                          <div className="mt-1 text-[#2b1533]">{alert.detail}</div>
                         </div>
 
-                        <div className="text-xs text-[#8f7d8f]">
+                        <div className="text-xs text-[#7d6a80]">
                           Created: {new Date(alert.created_at).toLocaleString()}
                         </div>
 
@@ -341,32 +361,32 @@ export default function AdminPage() {
               </CardContent>
             </Card>
 
-            <Card className="rounded-[28px] border border-white/10 bg-white/6 shadow-sm">
+            <Card className="rounded-[28px] border border-[#d8bfd8] bg-[#f3e6f4] shadow-sm">
               <CardHeader className="pb-2">
-                <CardTitle className="text-xl font-semibold text-[#FCF8F6]">
+                <CardTitle className="text-xl font-semibold text-[#2b1533]">
                   User Control
                 </CardTitle>
               </CardHeader>
 
-              <CardContent className="grid gap-3">
+              <CardContent className="grid max-h-[70vh] gap-3 overflow-y-auto pr-2">
                 {users.length === 0 ? (
-                  <div className="text-[#d2bfd0]">No users found.</div>
+                  <div className="text-[#4f3e58]">No users found.</div>
                 ) : (
                   users.map((user) => (
                     <div
                       key={user.id}
-                      className="rounded-[24px] border border-white/10 bg-white/5 p-4 shadow-sm"
+                      className="rounded-[24px] border border-[#dec9e0] bg-white/70 p-4 shadow-sm"
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div>
-                          <div className="font-semibold text-[#FCF8F6]">
+                          <div className="font-semibold text-[#2b1533]">
                             {user.full_name || user.username}
                           </div>
-                          <div className="text-sm text-[#d2bfd0]">@{user.username}</div>
-                          <div className="text-sm text-[#d2bfd0]">{user.email}</div>
+                          <div className="text-sm text-[#5f4d66]">@{user.username}</div>
+                          <div className="text-sm text-[#5f4d66]">{user.email}</div>
 
                           <div className="mt-2 flex gap-2">
-                            <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-white">
+                            <span className="rounded-full bg-[#e5d3e8] px-3 py-1 text-xs text-[#4f3e58]">
                               {user.role}
                             </span>
                             <span
@@ -383,7 +403,7 @@ export default function AdminPage() {
 
                         <Button
                           variant="outline"
-                          className="rounded-2xl border-white/10 bg-white/5 text-white hover:bg-white/10"
+                          className="rounded-2xl border-[#dec9e0] bg-white text-[#4f3e58] hover:bg-[#f8edf8]"
                           disabled={busyId === user.id || user.role === "admin"}
                           onClick={() => toggleSuspend(user)}
                         >
