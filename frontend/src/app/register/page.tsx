@@ -7,6 +7,7 @@ import { setAuth } from "@/lib/auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import AuthParticlesBackground from "@/components/ui/particles/auth-particles-background";
 
 const REGISTER_PATH = "/auth/register";
 const LOGIN_PATH = "/auth/login";
@@ -85,8 +86,10 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="auth-page min-h-screen px-6 py-12 text-[#FCF8F6]">
-      <div className="mx-auto flex min-h-[calc(100vh-6rem)] max-w-2xl items-center justify-center">
+    <div className="auth-page relative min-h-screen overflow-hidden px-6 py-12 text-[#FCF8F6]">
+      <AuthParticlesBackground />
+
+      <div className="relative z-10 mx-auto flex min-h-[calc(100vh-6rem)] max-w-2xl items-center justify-center">
         <Card className="w-full rounded-[40px] border-white/10 bg-[linear-gradient(180deg,rgba(33,26,41,0.9),rgba(20,14,26,0.92))] shadow-[0_20px_80px_rgba(0,0,0,0.38)] backdrop-blur-2xl">
           <CardHeader>
             <CardTitle className="text-4xl text-[#FCF8F6]">Create account</CardTitle>

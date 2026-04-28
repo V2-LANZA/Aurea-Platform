@@ -1,0 +1,16 @@
+.root {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  opacity: 0.96;
+  filter: drop-shadow(0 0 18px rgba(247, 216, 75, 0.08))
+    drop-shadow(0 0 26px rgba(205, 183, 255, 0.08))
+    brightness(1.08);
+}

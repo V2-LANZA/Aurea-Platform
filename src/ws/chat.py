@@ -1,19 +1,17 @@
 import json
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from sqlalchemy import or_
 
-from ..auth import decode_token, hash_password
+from ..auth import decode_token
 from ..db import SessionLocal
-from ..models import Alert, GroupMember, Message, User
-from ..services.bot import build_alert_detail, build_bot_reply, humanize_reasons
-from ..services.detect import analyze
+from ..models import Group, GroupMember, GroupRestriction, User
+from ..services.messages_service import process_message, serialize_message
+from ..services.bot import BOT_DISPLAY_NAME, BOT_USERNAME
 from .hub import manager
 
 router = APIRouter()
-
-RISK_THRESHOLD = 0.3
-BOT_USERNAME = "__aurea_bot__"
-BOT_EMAIL = "aurea-bot@local"
 
 
 def _extract_content(raw: str) -> str:
@@ -24,29 +22,6 @@ def _extract_content(raw: str) -> str:
     except json.JSONDecodeError:
         pass
     return raw.strip()
-
-
-def _display_name(user: User | None) -> str:
-    if not user:
-        return "unknown"
-    return user.full_name or user.username
-
-
-def _get_or_create_bot_user(db) -> User:
-    bot = db.query(User).filter(User.username == BOT_USERNAME).first()
-    if bot:
-        return bot
-
-    bot = User(
-        username=BOT_USERNAME,
-        email=BOT_EMAIL,
-        full_name="Aurea Bot",
-        password_hash=hash_password("bot-not-for-login"),
-    )
-    db.add(bot)
-    db.commit()
-    db.refresh(bot)
-    return bot
 
 
 @router.websocket("/ws/chat/{group_id}")
@@ -72,8 +47,9 @@ async def chat_socket(websocket: WebSocket, group_id: int):
     try:
         user = db.query(User).filter(User.id == int(user_id)).first()
         member = db.query(GroupMember).filter_by(group_id=group_id, user_id=int(user_id)).first()
+        group = db.query(Group).filter(Group.id == group_id).first()
 
-        if not user or not member:
+        if not user or not member or not group:
             await websocket.close(code=4403, reason="Not a member of this group")
             return
         if user.is_suspended:
@@ -93,80 +69,73 @@ async def chat_socket(websocket: WebSocket, group_id: int):
             if user.is_suspended:
                 await websocket.close(code=4403, reason="Your account is suspended")
                 return
+            db.refresh(group)
+            if group.is_suspended and user.role != "admin":
+                await websocket.send_json(
+                    {
+                        "type": "system",
+                        "message_type": "system",
+                        "is_bot": True,
+                        "username": BOT_USERNAME,
+                        "full_name": BOT_DISPLAY_NAME,
+                        "detail": "This group has been suspended by an admin. Messages are disabled.",
+                    }
+                )
+                continue
+            restriction = (
+                db.query(GroupRestriction)
+                .filter(
+                    GroupRestriction.group_id == group_id,
+                    GroupRestriction.user_id == int(user_id),
+                    GroupRestriction.resolved_at.is_(None),
+                    or_(
+                        GroupRestriction.restricted_until.is_(None),
+                        GroupRestriction.restricted_until > datetime.now(timezone.utc),
+                    ),
+                )
+                .first()
+            )
+            if restriction:
+                await websocket.send_json(
+                    {
+                        "type": "system",
+                        "message_type": "system",
+                        "is_bot": True,
+                        "username": BOT_USERNAME,
+                        "full_name": BOT_DISPLAY_NAME,
+                        "detail": "You are restricted from sending messages in this group.",
+                    }
+                )
+                continue
 
-            message = Message(
+            result = process_message(
+                db,
                 group_id=group_id,
-                user_id=user.id,
+                sender=user,
                 content=content,
             )
-            db.add(message)
-            db.commit()
-            db.refresh(message)
 
-            score, reasons = analyze(content)
-            bot_text = build_bot_reply(content, score, reasons)
+            if result.sender_notice:
+                await websocket.send_json(
+                    {
+                        "type": "system",
+                        "message_type": "system",
+                        "is_bot": True,
+                        "username": BOT_USERNAME,
+                        "full_name": BOT_DISPLAY_NAME,
+                        "detail": result.sender_notice,
+                    }
+                )
 
             await manager.broadcast(
                 group_id,
-                {
-                    "type": "message",
-                    "id": message.id,
-                    "group_id": group_id,
-                    "user_id": user.id,
-                    "username": user.username,
-                    "full_name": user.full_name,
-                    "pronouns": user.pronouns,
-                    "avatar_url": user.avatar_url,
-                    "sender_is_suspended": user.is_suspended,
-                    "sender_is_available": not user.is_suspended,
-                    "content": message.content,
-                    "created_at": message.created_at.isoformat() if message.created_at else None,
-                },
+                serialize_message(result.user_message),
             )
 
-            if score >= RISK_THRESHOLD:
-                severity = "high" if score >= 1 else "medium"
-                alert = Alert(
-                    group_id=group_id,
-                    message_id=message.id,
-                    sender_username=user.username,
-                    trigger_text=message.content,
-                    matched_reasons=", ".join(humanize_reasons(reasons)) or None,
-                    severity=severity,
-                    level="flagged",
-                    detail=build_alert_detail(reasons),
-                )
-                db.add(alert)
-                db.commit()
-
-            if bot_text:
-                bot_user = _get_or_create_bot_user(db)
-
-                bot_message = Message(
-                    group_id=group_id,
-                    user_id=bot_user.id,
-                    content=bot_text,
-                )
-                db.add(bot_message)
-                db.commit()
-                db.refresh(bot_message)
-
+            if result.bot_message:
                 await manager.broadcast(
                     group_id,
-                    {
-                        "type": "bot",
-                        "id": bot_message.id,
-                        "group_id": group_id,
-                        "user_id": bot_user.id,
-                        "username": bot_user.username,
-                        "full_name": bot_user.full_name,
-                        "pronouns": bot_user.pronouns,
-                        "avatar_url": bot_user.avatar_url,
-                        "sender_is_suspended": False,
-                        "sender_is_available": True,
-                        "content": bot_message.content,
-                        "created_at": bot_message.created_at.isoformat() if bot_message.created_at else None,
-                    },
+                    serialize_message(result.bot_message, "bot"),
                 )
 
     except WebSocketDisconnect:

@@ -13,21 +13,21 @@ export default function MessageBubble({
   isMe: boolean;
   onReport?: (m: ChatMessage) => void;
 }) {
-  const flagged = !!msg.risk?.flagged;
-  const score = msg.risk?.score;
-  const reasons = msg.risk?.reasons ?? [];
+  const isBot = msg.messageType === "bot" || msg.messageType === "system" || msg.isBot;
+  const displayName = isMe ? "You" : isBot ? "Aurea Safety Bot" : msg.displayName || msg.from;
+  const handle = isBot ? "@aurea_bot" : `@${msg.from}`;
+  const text = isBot ? msg.text.replace(/^Aurea (Safety )?Bot:\s*/i, "").trim() : msg.text;
 
   return (
-    <div className={`rounded-2xl border border-black/5 p-3 ${isMe ? "bg-white" : "bg-white/70"}`}>
+    <div className={`rounded-2xl border p-3 ${isMe ? "border-[#7c5bb8]/30 bg-[#38264C]/88 text-[#F8F5FF]" : isBot ? "border-[#F5D547]/20 bg-[#2A1E3E]/88 text-[#F8F5FF]" : "border-white/10 bg-white/6 text-[#F8F5FF]"}`}>
       <div className="flex items-center justify-between gap-2">
-        <div className="text-xs opacity-70">{isMe ? "You" : msg.from}</div>
+        <div>
+          <div className="text-xs text-[#D8CFF0]">{displayName}</div>
+          {!isMe ? <div className="text-[11px] text-[#B8A9D6]">{handle}</div> : null}
+        </div>
 
         <div className="flex items-center gap-2">
-          {flagged && <Badge variant="destructive">Flagged</Badge>}
-
-          {typeof score === "number" && (
-            <Badge variant="outline">Risk {score}/100</Badge>
-          )}
+          {isBot && <Badge variant="outline">Safety Bot</Badge>}
 
           {!isMe && onReport && (
             <Button
@@ -42,17 +42,7 @@ export default function MessageBubble({
         </div>
       </div>
 
-      <div className="mt-2 whitespace-pre-wrap text-sm">{msg.text}</div>
-
-      {reasons.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-2">
-          {reasons.slice(0, 3).map((r, i) => (
-            <Badge key={i} variant="secondary">
-              {r}
-            </Badge>
-          ))}
-        </div>
-      )}
+      <div className="mt-2 whitespace-pre-wrap text-sm">{text}</div>
     </div>
   );
 }
