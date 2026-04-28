@@ -13,6 +13,7 @@ from .routers import (
     auth_routes,
     group_routes,
     message_routes,
+    report_routes,
     user_routes,
 )
 from .ws.chat import router as ws_router
@@ -28,6 +29,10 @@ if STATIC_DIR.exists():
 allowed_origins = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "http://localhost:3001",
+    "http://127.0.0.1:3001",
+    "http://localhost:3002",
+    "http://127.0.0.1:3002",
 ]
 
 app.add_middleware(
@@ -64,6 +69,55 @@ def _ensure_runtime_schema():
             if column_name not in columns:
                 connection.execute(text(statement))
 
+        if "groups" in tables:
+            group_columns = {column["name"] for column in inspector.get_columns("groups")}
+            group_additions = {
+                "is_suspended": "ALTER TABLE groups ADD COLUMN is_suspended BOOLEAN DEFAULT 0 NOT NULL",
+                "suspended_at": "ALTER TABLE groups ADD COLUMN suspended_at DATETIME",
+                "suspended_by_id": "ALTER TABLE groups ADD COLUMN suspended_by_id INTEGER",
+                "suspension_reason": "ALTER TABLE groups ADD COLUMN suspension_reason TEXT",
+            }
+            for column_name, statement in group_additions.items():
+                if column_name not in group_columns:
+                    connection.execute(text(statement))
+
+        if "group_restrictions" in tables:
+            restriction_columns = {column["name"] for column in inspector.get_columns("group_restrictions")}
+            restriction_additions = {
+                "restricted_until": "ALTER TABLE group_restrictions ADD COLUMN restricted_until DATETIME",
+                "restricted_by_system": "ALTER TABLE group_restrictions ADD COLUMN restricted_by_system BOOLEAN DEFAULT 0 NOT NULL",
+            }
+            for column_name, statement in restriction_additions.items():
+                if column_name not in restriction_columns:
+                    connection.execute(text(statement))
+
+        if "alerts" in tables:
+            alert_columns = {column["name"] for column in inspector.get_columns("alerts")}
+            if "admin_note" not in alert_columns:
+                connection.execute(text("ALTER TABLE alerts ADD COLUMN admin_note TEXT"))
+            connection.execute(
+                text(
+                    """
+                    UPDATE alerts
+                    SET status = CASE
+                        WHEN status = 'pending' THEN 'pending_review'
+                        WHEN status = 'escalated' THEN 'high_risk'
+                        ELSE status
+                    END
+                    """
+                )
+            )
+
+        if "user_reports" in tables:
+            report_columns = {column["name"] for column in inspector.get_columns("user_reports")}
+            if "admin_note" not in report_columns:
+                connection.execute(text("ALTER TABLE user_reports ADD COLUMN admin_note TEXT"))
+
+        if "friend_requests" in tables:
+            request_columns = {column["name"] for column in inspector.get_columns("friend_requests")}
+            if "responded_at" not in request_columns:
+                connection.execute(text("ALTER TABLE friend_requests ADD COLUMN responded_at DATETIME"))
+
         if "user_group_states" in tables and "group_members" in tables:
             connection.execute(
                 text(
@@ -89,6 +143,7 @@ app.include_router(user_routes.router, prefix="/users", tags=["users"])
 app.include_router(group_routes.router, prefix="/groups", tags=["groups"])
 app.include_router(message_routes.router)
 app.include_router(alert_routes.router, prefix="/alerts", tags=["alerts"])
+app.include_router(report_routes.router, prefix="/reports", tags=["reports"])
 app.include_router(admin_routes.router, prefix="/admin", tags=["admin"])
 app.include_router(ws_router)
 

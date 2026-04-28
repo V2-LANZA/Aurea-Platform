@@ -2,11 +2,13 @@ import re
 
 RULES: dict[str, dict[str, object]] = {
     "ask_age": {
-        "weight": 0.28,
+        "weight": 0.36,
         "patterns": [
             r"\bhow old are you\b",
             r"\bwhat(?:'s| is) your age\b",
             r"\bare you (?:under|over) \d{1,2}\b",
+            r"\bwhat school do you go to\b",
+            r"\bare you under 18\b",
         ],
     },
     "secrecy": {
@@ -22,8 +24,10 @@ RULES: dict[str, dict[str, object]] = {
         "weight": 0.52,
         "patterns": [
             r"\bsend (?:pics?|photos?|pictures?|images?)\b",
+            r"\bsend (?:me )?(?:a )?private photo\b",
             r"\bshow me your body\b",
             r"\bsend nudes?\b",
+            r"\bshow me (?:your )?(?:body|chest)\b",
             r"\bturn on your camera\b",
         ],
     },
@@ -34,6 +38,8 @@ RULES: dict[str, dict[str, object]] = {
             r"\bcome alone\b",
             r"\bsneak out\b",
             r"\blet's meet up\b",
+            r"\bdon'?t bring anyone\b",
+            r"\bmeet me\b",
         ],
     },
     "location": {
@@ -44,6 +50,8 @@ RULES: dict[str, dict[str, object]] = {
             r"\bwhere are you from\b",
             r"\bwhat(?:'s| is) your address\b",
             r"\bsend me your location\b",
+            r"\bshare your location\b",
+            r"\bwhat(?:'s| is) your postcode\b",
         ],
     },
     "sexual_terms": {
@@ -65,6 +73,20 @@ RULES: dict[str, dict[str, object]] = {
             r"\bend your life\b",
         ],
     },
+    "self_harm_distress": {
+        "weight": 0.92,
+        "patterns": [
+            r"\bi want to kill myself\b",
+            r"\bi am going to kill myself\b",
+            r"\bi wanna die\b",
+            r"\bi want to die\b",
+            r"\bi don't want to live\b",
+            r"\bi want to end my life\b",
+            r"\bi feel suicidal\b",
+            r"\bi might hurt myself\b",
+            r"\bi can'?t do this anymore\b",
+        ],
+    },
     "violent_threat": {
         "weight": 0.85,
         "patterns": [
@@ -73,10 +95,12 @@ RULES: dict[str, dict[str, object]] = {
             r"\bi(?:'| a)?ll hurt you\b",
             r"\bi(?:'| a)?ll beat you\b",
             r"\bi(?:'| a)?ll find you\b",
+            r"\byou better watch out\b",
+            r"\bi(?: am|m) going to find you\b",
         ],
     },
     "harassment": {
-        "weight": 0.44,
+        "weight": 0.52,
         "patterns": [
             r"\bfuck you\b",
             r"\bi hate you\b",
@@ -87,6 +111,11 @@ RULES: dict[str, dict[str, object]] = {
             r"\bbitch\b",
             r"\bslut\b",
             r"\bloser\b",
+            r"\byou pig\b",
+            r"\bpig\b",
+            r"\bfreak\b",
+            r"\bnobody likes you\b",
+            r"\bshut up\b",
         ],
     },
     "hate_speech": {
@@ -94,8 +123,11 @@ RULES: dict[str, dict[str, object]] = {
         "patterns": [
             r"\b(?:racist|terrorist) pig\b",
             r"\b(?:go back to your country)\b",
+            r"\bleave this country\b",
+            r"\byou do(?:n'?| no)t belong here\b",
             r"\byou people are\b",
             r"\b(?:fag|retard)\b",
+            r"\bgo back where you came from\b",
         ],
     },
 }
@@ -129,14 +161,30 @@ FUZZY_PATTERNS: dict[str, list[re.Pattern[str]]] = {
         re.compile(r"\bwhere you live\b", re.I),
         re.compile(r"\bwhat is your address\b", re.I),
         re.compile(r"\bsend me your location\b", re.I),
+        re.compile(r"\bshare your location\b", re.I),
     ],
     "self_harm_encouragement": [
         re.compile(r"\bk\s*[i1!\*]?\s*l+\s*l+\s*(?:yourself|urself|u?rself)\b", re.I),
         re.compile(r"\bkys\b", re.I),
     ],
+    "self_harm_distress": [
+        re.compile(r"\bi\s*(?:want|wanna)\s*to\s*(?:die|kill myself)\b", re.I),
+        re.compile(r"\bi\s*feel\s*suicidal\b", re.I),
+    ],
     "harassment": [
         re.compile(r"\bf\s*u\s*c\s*k+\s+you\b", re.I),
         re.compile(r"\bi\s+hate\s+you\b", re.I),
+        re.compile(r"\byou(?: are|'re)?\s+disgusting\b", re.I),
+        re.compile(r"\byou\s+pig\b", re.I),
+    ],
+    "hate_speech": [
+        re.compile(r"\bgo\s+back\s+to\s+your\s+country\b", re.I),
+        re.compile(r"\byou\s+do(?:n'?| no)t\s+belong\s+here\b", re.I),
+        re.compile(r"\bleave\s+this\s+country\b", re.I),
+    ],
+    "violent_threat": [
+        re.compile(r"\byou\s+better\s+watch\s+out\b", re.I),
+        re.compile(r"\bi(?: am|m)\s+going\s+to\s+find\s+you\b", re.I),
     ],
 }
 

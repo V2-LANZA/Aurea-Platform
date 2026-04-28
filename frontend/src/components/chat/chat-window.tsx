@@ -60,7 +60,7 @@ export default function ChatWindow({
 
   return (
     <div className="h-full flex flex-col">
-      <div className="border-b bg-white/60 backdrop-blur p-4 flex items-center justify-between">
+      <div className="flex items-center justify-between border-b border-white/10 bg-[#120b24]/88 p-4 text-[#F8F5FF] backdrop-blur-xl">
         <div className="font-medium">{title}</div>
         {peer && statusBadge}
       </div>
@@ -86,7 +86,7 @@ export default function ChatWindow({
         </div>
       </ScrollArea>
 
-      <div className="border-t bg-white/60 backdrop-blur p-3 flex gap-2">
+      <div className="flex gap-2 border-t border-white/10 bg-[#120b24]/88 p-3 backdrop-blur-xl">
         <Input
           disabled={!canChat}
           placeholder={canChat ? "Type a message…" : "Select a user first"}
@@ -95,8 +95,9 @@ export default function ChatWindow({
           onKeyDown={(e) => {
             if (e.key === "Enter") onSend();
           }}
+          className="border-white/10 bg-[#140f25] text-[#F8F5FF] placeholder:text-[#AFA2C9]"
         />
-        <Button className="mystic-glow" disabled={!canChat} onClick={onSend}>
+        <Button className="bg-[#5c3d86] text-white hover:bg-[#4f3473]" disabled={!canChat} onClick={onSend}>
           Send
         </Button>
       </div>
@@ -104,6 +105,8 @@ export default function ChatWindow({
       <ReportDialog
         open={reportOpen}
         msg={reportMsg}
+        reportedUserId={typeof reportMsg?.userId === "number" ? reportMsg.userId : null}
+        groupId={typeof reportMsg?.groupId === "number" ? reportMsg.groupId : null}
         onClose={() => {
           setReportOpen(false);
           setReportMsg(null);

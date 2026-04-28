@@ -107,6 +107,11 @@ export default function ProfilePage() {
   return (
     <AppShell>
       <div className="mx-auto w-full max-w-6xl px-6 py-10">
+        <div className="mb-6">
+          <button type="button" onClick={() => router.back()} className="aurea-link text-sm font-medium">
+            ← Back
+          </button>
+        </div>
         <div className="grid gap-8 lg:grid-cols-[.85fr_1.15fr]">
           <Card className="rounded-[36px] border-white/10 bg-white/6 shadow-[0_20px_80px_rgba(0,0,0,0.28)] backdrop-blur-xl">
             <CardHeader>

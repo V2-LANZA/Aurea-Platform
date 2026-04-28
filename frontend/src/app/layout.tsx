@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import { AppShell } from "@/components/app-shell";
+import { AureaBotNoticeProvider } from "@/components/aurea-bot-notice-provider";
+import { RouteChangeEffects } from "@/components/route-change-effects";
 import { Toaster } from "@/components/ui/sonner";
 
 const geistSans = Geist({
@@ -26,8 +29,11 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        {children}
-        <Toaster richColors />
+        <AureaBotNoticeProvider>
+          <RouteChangeEffects />
+          <AppShell>{children}</AppShell>
+          <Toaster richColors />
+        </AureaBotNoticeProvider>
       </body>
     </html>
   );

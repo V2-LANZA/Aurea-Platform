@@ -2,11 +2,13 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { api } from "@/lib/api";
+import axios from "axios";
+import { api, API_BASE, buildApiUrl } from "@/lib/api";
 import { setAuth } from "@/lib/auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import AuthParticlesBackground from "@/components/ui/particles/auth-particles-background";
 
 const LOGIN_PATH = "/auth/login";
 
@@ -19,6 +21,9 @@ function getErrorMessage(error: unknown, fallback: string) {
   if (typeof detail === "string") return detail;
   if (detail && typeof detail === "object" && "msg" in detail) {
     return String(detail.msg);
+  }
+  if (!(typedError as { response?: unknown }).response) {
+    return "Could not connect to the backend. Check that FastAPI is running on http://127.0.0.1:8000.";
   }
   return typedError?.message || fallback;
 }
@@ -35,7 +40,8 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const res = await api.post(LOGIN_PATH, { username, password });
+      const loginUrl = buildApiUrl(LOGIN_PATH);
+      const res = await api.post(loginUrl, { username, password });
 
       const token =
         res.data?.access_token ?? res.data?.token ?? res.data?.jwt ?? null;
@@ -48,6 +54,19 @@ export default function LoginPage() {
       setAuth(token, res.data?.username ?? username, res.data?.role ?? "user");
       router.push("/");
     } catch (e: unknown) {
+      const axiosError = axios.isAxiosError(e) ? e : null;
+      console.warn("Login request failed", {
+        apiBase: API_BASE,
+        loginPath: LOGIN_PATH,
+        fullLoginUrl: buildApiUrl(LOGIN_PATH),
+        message: axiosError?.message ?? (e as { message?: string })?.message,
+        code: axiosError?.code,
+        url: axiosError?.config?.url,
+        baseURL: axiosError?.config?.baseURL,
+        method: axiosError?.config?.method,
+        status: axiosError?.response?.status,
+        data: axiosError?.response?.data,
+      });
       setErr(getErrorMessage(e, "Login failed"));
     } finally {
       setLoading(false);
@@ -55,8 +74,10 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="auth-page min-h-screen px-6 py-12 text-[#FCF8F6]">
-      <div className="mx-auto flex min-h-[calc(100vh-6rem)] max-w-2xl items-center justify-center">
+    <div className="auth-page relative min-h-screen overflow-hidden px-6 py-12 text-[#FCF8F6]">
+      <AuthParticlesBackground />
+
+      <div className="relative z-10 mx-auto flex min-h-[calc(100vh-6rem)] max-w-2xl items-center justify-center">
         <Card className="w-full rounded-[40px] border-white/10 bg-[linear-gradient(180deg,rgba(33,26,41,0.9),rgba(20,14,26,0.92))] shadow-[0_20px_80px_rgba(0,0,0,0.38)] backdrop-blur-2xl">
           <CardHeader>
             <CardTitle className="text-4xl text-[#FCF8F6]">Login</CardTitle>
@@ -96,6 +117,14 @@ export default function LoginPage() {
             >
               {loading ? "Logging in..." : "Login"}
             </Button>
+
+            <button
+              type="button"
+              onClick={() => router.push("/forgot-password")}
+              className="text-left text-sm text-[#D8CFF0] transition hover:text-white"
+            >
+              Forgot password?
+            </button>
 
             <Button
               variant="outline"

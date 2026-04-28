@@ -1,266 +1,146 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { AppShell } from "@/components/app-shell";
-import { api } from "@/lib/api";
-import { isAuthed } from "@/lib/auth";
+import Link from "next/link";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { AppShell } from "@/components/app-shell";
+import { AdminSurface } from "@/components/admin/admin-surface";
 import { Button } from "@/components/ui/button";
-import { toast } from "sonner";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { isAdmin, isAuthed } from "@/lib/auth";
+import { openSafetyHelp } from "@/lib/safety-help";
 
-type Group = {
-  id: number;
-  name: string;
-  invite_code: string;
-};
+const helpCards = [
+  {
+    title: "I feel unsafe now",
+    body: "Move toward a trusted adult or safe public place now. If there is immediate danger, contact emergency services.",
+  },
+  {
+    title: "Someone asked for my location",
+    body: "Do not share your address, school, or live location. Save the messages and report the user from chat.",
+  },
+  {
+    title: "Someone asked for photos",
+    body: "Do not send private images. Keep the chat history and report the user.",
+  },
+  {
+    title: "Someone asked me to keep a secret",
+    body: "Secrecy requests are a warning sign. Tell a trusted adult or moderator and do not handle it alone.",
+  },
+  {
+    title: "Someone wants to meet up",
+    body: "Do not agree to meet alone. Keep the messages and tell a trusted adult or moderator right away.",
+  },
+  {
+    title: "Someone is bullying me",
+    body: "Stop engaging if you can, keep the chat history, report the behaviour, and tell a trusted adult or moderator.",
+  },
+];
 
-type AlertItem = {
-  id: number;
-  group_id: number;
-  level: string;
-  detail: string;
-  created_at: string;
-  sender_username: string;
-  trigger_text: string;
-  matched_reasons?: string | null;
-  severity: string;
-  status: string;
-};
-
-function getErrorMessage(error: unknown, fallback: string) {
-  const typedError = error as {
-    response?: { data?: { detail?: unknown } };
-    message?: string;
-  };
-  const detail = typedError?.response?.data?.detail;
-  if (typeof detail === "string") return detail;
-  if (Array.isArray(detail)) {
-    return detail
-      .map((item) =>
-        typeof item === "object" && item !== null && "msg" in item
-          ? String(item.msg)
-          : JSON.stringify(item)
-      )
-      .join(", ");
-  }
-  if (detail && typeof detail === "object" && "msg" in detail) {
-    return String(detail.msg);
-  }
-  return typedError?.message || fallback;
-}
-
-function buildTip(detail: string) {
-  const text = detail.toLowerCase();
-
-  if (text.includes("photos") || text.includes("nudes") || text.includes("sexual")) {
-    return "Do not share personal images online.";
-  }
-  if (text.includes("location") || text.includes("school")) {
-    return "Avoid sharing location or school details.";
-  }
-  if (text.includes("secrecy")) {
-    return "Secrecy from trusted adults can be a warning sign.";
-  }
-  if (text.includes("meeting")) {
-    return "Avoid private meetups with people online.";
-  }
-
-  return "Review the conversation carefully.";
-}
-
-function formatDate(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString();
-}
+const checklist = [
+  "Do not share your address, school, or live location",
+  "Do not send private images",
+  "Do not meet alone",
+  "Tell a trusted adult or moderator",
+  "Report the user",
+];
 
 export default function AlertsPage() {
   const router = useRouter();
-  const [groups, setGroups] = useState<Group[]>([]);
-  const [selectedGroupId, setSelectedGroupId] = useState<string>("all");
-  const [alerts, setAlerts] = useState<AlertItem[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [openCard, setOpenCard] = useState<number | null>(0);
 
   useEffect(() => {
-    if (!isAuthed()) router.push("/login");
+    if (!isAuthed()) {
+      router.push("/login");
+      return;
+    }
+    if (isAdmin()) {
+      router.replace("/admin/moderation");
+    }
   }, [router]);
-
-  async function loadGroups() {
-    try {
-      const res = await api.get("/groups");
-      setGroups(Array.isArray(res.data) ? res.data : []);
-    } catch (e: unknown) {
-      toast.error(getErrorMessage(e, "Could not load groups"));
-    }
-  }
-
-  async function loadAlerts(groupId?: number) {
-    setLoading(true);
-    try {
-      const path =
-        typeof groupId === "number"
-          ? `/alerts?group_id=${groupId}`
-          : "/alerts";
-
-      const res = await api.get(path);
-      setAlerts(Array.isArray(res.data) ? res.data : []);
-    } catch (e: unknown) {
-      toast.error(getErrorMessage(e, "Could not load alerts"));
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      void loadGroups();
-      void loadAlerts();
-    }, 0);
-
-    return () => window.clearTimeout(timer);
-  }, []);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => {
-      if (selectedGroupId === "all") void loadAlerts();
-      else void loadAlerts(Number(selectedGroupId));
-    }, 0);
-
-    return () => window.clearTimeout(timer);
-  }, [selectedGroupId]);
-
-  const groupNameMap = useMemo(
-    () => Object.fromEntries(groups.map((group) => [group.id, group.name])),
-    [groups]
-  );
 
   return (
     <AppShell>
-      <div className="mx-auto w-full max-w-7xl px-6 py-10">
+      <AdminSurface variant="alerts">
+      <div className="aurea-page mx-auto w-full max-w-6xl px-6 py-10">
         <div className="grid gap-8">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <div className="text-xs font-semibold uppercase tracking-[0.28em] text-[#B9929F]">
-                Monitoring feed
-              </div>
-              <h1 className="mt-3 text-4xl font-semibold tracking-tight text-[#FCF8F6]">
-                Alerts
-              </h1>
-              <p className="mt-3 max-w-2xl text-base leading-8 text-[#d2bfd0]">
-                Review the alerts generated across your groups, understand what
-                triggered them, and see the message that needs attention.
-              </p>
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-[0.28em] text-[#B8A9D6]">
+              Safety centre
             </div>
-
-            <div className="flex flex-wrap items-center gap-3">
-              <select
-                value={selectedGroupId}
-                onChange={(e) => setSelectedGroupId(e.target.value)}
-                className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white"
-              >
-                <option value="all">All groups</option>
-                {groups.map((group) => (
-                  <option key={group.id} value={String(group.id)}>
-                    {group.name}
-                  </option>
-                ))}
-              </select>
-
-              <Button
-                variant="outline"
-                className="rounded-2xl border-white/10 bg-white/5 text-white hover:bg-white/10"
-                onClick={() => {
-                  if (selectedGroupId === "all") void loadAlerts();
-                  else void loadAlerts(Number(selectedGroupId));
-                }}
-              >
-                Refresh
-              </Button>
-            </div>
+            <h1 className="mt-3 text-4xl font-semibold tracking-tight text-[#FCF8F6]">
+              How can we help you stay safe?
+            </h1>
+            <p className="mt-3 max-w-3xl text-base leading-8 text-[#D8CFF0]">
+              Tap a card for quick guidance, then report the user from chat if something feels unsafe, private, threatening, or sexual.
+            </p>
           </div>
 
-          <Card className="rounded-[36px] border-white/10 bg-white/6 shadow-[0_20px_80px_rgba(0,0,0,0.28)] backdrop-blur-xl">
-            <CardHeader>
-              <CardTitle className="text-3xl text-[#FCF8F6]">Alert stream</CardTitle>
-            </CardHeader>
-
-            <CardContent className="grid gap-5">
-              {loading ? (
-                <div className="rounded-[28px] border border-white/10 bg-white/5 p-6 text-[#d2bfd0]">
-                  Loading alerts...
-                </div>
-              ) : alerts.length === 0 ? (
-                <div className="rounded-[28px] border border-white/10 bg-white/5 p-6 text-[#d2bfd0]">
-                  No alerts found for the selected group.
-                </div>
-              ) : (
-                alerts.map((alert) => (
-                  <div
-                    key={alert.id}
-                    className="rounded-[30px] border border-white/10 bg-white/5 p-6"
-                  >
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <div className="text-2xl font-semibold text-[#FCF8F6]">
-                          Alert #{alert.id}
-                        </div>
-                        <div className="mt-2 text-sm text-[#B9929F]">
-                          {groupNameMap[alert.group_id] || `Group ${alert.group_id}`} · sender @
-                          {alert.sender_username}
-                        </div>
-                      </div>
-
-                      <div className="flex flex-wrap gap-2">
-                        <div className="rounded-full bg-[#F5D547]/12 px-3 py-1 text-sm font-medium text-[#F5D547]">
-                          {alert.severity}
-                        </div>
-                        <div className="rounded-full bg-[#453750] px-3 py-1 text-sm font-medium text-white">
-                          {alert.status}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="mt-5 grid gap-4 lg:grid-cols-[1.2fr_.8fr]">
-                      <div className="rounded-[24px] border border-white/10 bg-[#120E16] p-4">
-                        <div className="text-xs font-semibold uppercase tracking-[0.22em] text-[#B9929F]">
-                          Trigger message
-                        </div>
-                        <div className="mt-3 text-sm leading-7 text-[#e9dfe6]">
-                          {alert.trigger_text || alert.detail}
-                        </div>
-                      </div>
-
-                      <div className="grid gap-4">
-                        <div className="rounded-[24px] border border-white/10 bg-[#120E16] p-4">
-                          <div className="text-xs font-semibold uppercase tracking-[0.22em] text-[#B9929F]">
-                            Why flagged
-                          </div>
-                          <div className="mt-3 text-sm leading-7 text-[#e9dfe6]">
-                            {alert.matched_reasons || alert.detail}
-                          </div>
-                        </div>
-                        <div className="rounded-[24px] border border-white/10 bg-[#120E16] p-4">
-                          <div className="text-xs font-semibold uppercase tracking-[0.22em] text-[#B9929F]">
-                            Tip
-                          </div>
-                          <div className="mt-3 text-sm leading-7 text-[#e9dfe6]">
-                            {buildTip(alert.detail)}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="mt-4 text-xs text-[#8f7d8f]">
-                      {formatDate(alert.created_at)}
-                    </div>
-                  </div>
-                ))
-              )}
+          <Card className="rounded-[32px] border border-red-400/20 bg-[linear-gradient(145deg,rgba(101,24,42,0.28),rgba(18,11,36,0.92))] shadow-[0_20px_80px_rgba(0,0,0,0.24)] backdrop-blur-xl">
+            <CardContent className="flex flex-col gap-4 p-6 md:flex-row md:items-center md:justify-between">
+              <div>
+                <div className="text-sm uppercase tracking-[0.22em] text-[#F5D547]">Emergency</div>
+                <div className="mt-2 text-2xl font-semibold text-[#FCF8F6]">If you are in immediate danger, contact emergency services or a trusted adult now.</div>
+              </div>
+              <Button
+                className="rounded-2xl bg-[#F5D547] text-[#0C0910] hover:bg-[#edd031]"
+                onClick={openSafetyHelp}
+              >
+                Open Safety Help
+              </Button>
             </CardContent>
           </Card>
+
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {helpCards.map((card, index) => (
+              <button
+                key={card.title}
+                type="button"
+                onClick={() => setOpenCard((current) => (current === index ? null : index))}
+                className="aurea-panel rounded-[28px] p-6 text-left transition hover:bg-white/10"
+              >
+                <div className="text-lg font-semibold text-[#FCF8F6]">{card.title}</div>
+                <div className="mt-3 text-sm text-[#D8CFF0]">
+                  {openCard === index ? card.body : "Tap for quick advice"}
+                </div>
+              </button>
+            ))}
+          </div>
+
+          <div className="grid gap-6 lg:grid-cols-[1fr_.9fr]">
+            <Card className="aurea-panel rounded-[32px]">
+              <CardHeader>
+                <CardTitle className="text-2xl text-[#FCF8F6]">Safety checklist</CardTitle>
+              </CardHeader>
+              <CardContent className="grid gap-3">
+                {checklist.map((item) => (
+                  <div key={item} className="aurea-panel-soft rounded-[24px] px-5 py-4 text-sm leading-7 text-[#F8F5FF]">
+                    {item}
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+
+            <Card className="aurea-panel rounded-[32px]">
+              <CardHeader>
+                <CardTitle className="text-2xl text-[#FCF8F6]">Quick actions</CardTitle>
+              </CardHeader>
+              <CardContent className="grid gap-3">
+                <div className="aurea-panel-soft rounded-[24px] px-5 py-4 text-sm leading-7 text-[#D8CFF0]">
+                  If someone sends you a message that feels unsafe, private, threatening, sexual, or makes you uncomfortable, you can report them from the chat. Click the user’s name or the message options, then choose Report User.
+                </div>
+                <Button asChild className="rounded-2xl bg-[#5c3d86] text-white hover:bg-[#4f3473]">
+                  <Link href="/chat">Report a user from chat</Link>
+                </Button>
+                <Button asChild variant="outline" className="aurea-button-ghost rounded-2xl">
+                  <Link href="/groups">Back to groups</Link>
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </div>
+      </AdminSurface>
     </AppShell>
   );
 }

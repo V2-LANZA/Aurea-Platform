@@ -1,133 +1,96 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
+import { AdminSurface } from "@/components/admin/admin-surface";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
 import { isAdmin, isAuthed } from "@/lib/auth";
 import { toast } from "sonner";
 
-type AlertItem = {
+type Point = { label: string; value: number };
+type Analytics = {
+  summary: {
+    total_alerts: number;
+    pending_review_alerts: number;
+    high_risk_alerts: number;
+    reviewed_alerts: number;
+    dismissed_alerts: number;
+    total_user_reports: number;
+    suspended_users: number;
+    restricted_groups: number;
+    active_group_restrictions: number;
+    suspended_groups: number;
+  };
+  alerts_by_severity: Point[];
+  alerts_by_status: Point[];
+  reports_by_reason: Point[];
+  safety_activity_over_time: Point[];
+  top_flagged_groups: Point[];
+  top_risk_categories: Point[];
+};
+
+type RecentReport = {
   id: number;
-  group_id: number;
+  reporter_username: string;
+  reported_username: string;
   group_name?: string | null;
-  message_id?: number | null;
-  sender_username: string;
-  sender_user_id?: number | null;
-  sender_display_name?: string | null;
-  sender_email?: string | null;
-  sender_is_suspended?: boolean | null;
-  trigger_text: string;
-  message_content?: string | null;
-  matched_reasons?: string | null;
-  severity: string;
-  level: string;
-  detail: string;
-  status: string;
-  is_reviewed: boolean;
-  admin_note?: string | null;
-  reviewed_by_username?: string | null;
-  reviewed_at?: string | null;
+  reason: string;
+  details?: string | null;
+  message_preview?: string | null;
   created_at: string;
-  message_created_at?: string | null;
-};
-
-type AdminDashboardData = {
-  total_users: number;
-  total_groups: number;
-  total_messages: number;
-  total_alerts: number;
-  pending_alerts: number;
-  high_severity_alerts: number;
-  escalated_alerts: number;
-  suspended_users: number;
-};
-
-type AdminUser = {
-  id: number;
-  username: string;
-  email: string;
-  full_name?: string | null;
-  role: string;
-  is_suspended: boolean;
-};
-
-type GroupMember = {
-  id: number;
-  username: string;
-  email: string;
-  full_name?: string | null;
-  is_suspended: boolean;
-  joined_at: string;
-};
-
-type AdminGroup = {
-  id: number;
-  name: string;
-  invite_code: string;
-  created_at: string;
-  created_by_username: string;
-  member_count: number;
-  members: GroupMember[];
 };
 
 function getErrorMessage(error: unknown, fallback: string) {
-  const typedError = error as {
-    response?: { data?: { detail?: unknown } };
-    message?: string;
-  };
-  const detail = typedError?.response?.data?.detail;
-  if (typeof detail === "string") return detail;
-  if (Array.isArray(detail)) {
-    return detail
-      .map((item) =>
-        typeof item === "object" && item !== null && "msg" in item
-          ? String(item.msg)
-          : JSON.stringify(item)
-      )
-      .join(", ");
-  }
-  if (detail && typeof detail === "object") {
-    return "msg" in detail ? String(detail.msg) : JSON.stringify(detail);
-  }
-  return typedError?.message || fallback;
+  const typedError = error as { response?: { data?: { detail?: string } }; message?: string };
+  return typedError?.response?.data?.detail || typedError?.message || fallback;
 }
 
-function csvEscape(value: unknown) {
-  const text = String(value ?? "");
-  return `"${text.replaceAll('"', '""')}"`;
-}
-
-function downloadCsv(filename: string, headers: string[], rows: Array<Array<unknown>>) {
-  const csv = [headers, ...rows]
-    .map((row) => row.map((cell) => csvEscape(cell)).join(","))
-    .join("\n");
-
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(url);
-}
-
-function formatDate(value?: string | null) {
-  if (!value) return "Unknown time";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString();
+function BarChartCard({ title, points }: { title: string; points: Point[] }) {
+  const max = Math.max(...points.map((point) => point.value), 1);
+  return (
+    <Card className="aurea-panel rounded-[28px]">
+      <CardContent className="p-6">
+        <div className="text-lg font-semibold text-[#FCF8F6]">{title}</div>
+        <div className="mt-5 grid gap-4">
+          {points.length === 0 ? (
+            <div className="text-sm text-[#D8CFF0]">No data available.</div>
+          ) : (
+            points.map((point) => (
+              <div key={point.label} className="grid gap-2">
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="text-[#F8F5FF]">{point.label}</span>
+                  <span className="text-[#D8CFF0]">{point.value}</span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-white/8">
+                  <div
+                    className="h-full rounded-full bg-[linear-gradient(90deg,#F5D547,#9A6DF0)]"
+                    style={{ width: `${(point.value / max) * 100}%` }}
+                  />
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
 export default function AdminReportsPage() {
   const router = useRouter();
-  const [dashboard, setDashboard] = useState<AdminDashboardData | null>(null);
-  const [alerts, setAlerts] = useState<AlertItem[]>([]);
-  const [users, setUsers] = useState<AdminUser[]>([]);
-  const [groups, setGroups] = useState<AdminGroup[]>([]);
+  const searchParams = useSearchParams();
+  const range = searchParams.get("range") || "all";
+  const sort = searchParams.get("sort") || "newest";
+  const search = searchParams.get("search") || "";
+  const [analytics, setAnalytics] = useState<Analytics | null>(null);
+  const [recentReports, setRecentReports] = useState<RecentReport[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchInput, setSearchInput] = useState(search);
 
   useEffect(() => {
     if (!isAuthed()) {
@@ -138,367 +101,260 @@ export default function AdminReportsPage() {
       router.push("/");
       return;
     }
-    loadReports();
-  }, [router]);
+    void loadReports();
+  }, [router, range]);
+
+  useEffect(() => {
+    setSearchInput(search);
+  }, [search]);
+
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      if (searchInput === search) return;
+      updateQuery({ search: searchInput });
+    }, 250);
+    return () => window.clearTimeout(handle);
+  }, [searchInput, search]);
 
   async function loadReports() {
     setLoading(true);
     try {
-      const [dashboardRes, alertsRes, usersRes, groupsRes] = await Promise.all([
-        api.get("/admin/dashboard"),
-        api.get("/admin/alerts"),
-        api.get("/admin/users"),
-        api.get("/admin/groups"),
+      const [analyticsRes, reportsRes] = await Promise.all([
+        api.get("/admin/reports/analytics", { params: { range } }),
+        api.get("/admin/reports", { params: { range, sort: "newest" } }),
       ]);
-
-      setDashboard(dashboardRes.data);
-      setAlerts(Array.isArray(alertsRes.data) ? alertsRes.data : []);
-      setUsers(Array.isArray(usersRes.data) ? usersRes.data : []);
-      setGroups(Array.isArray(groupsRes.data) ? groupsRes.data : []);
-    } catch (e: unknown) {
-      toast.error(getErrorMessage(e, "Could not load reports"));
+      setAnalytics(analyticsRes.data);
+      setRecentReports(Array.isArray(reportsRes.data) ? reportsRes.data : []);
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, "Could not load reports"));
     } finally {
       setLoading(false);
     }
   }
 
-  const chartItems = dashboard
-    ? [
-        { label: "Flagged", value: dashboard.total_alerts, color: "bg-sky-400" },
-        { label: "Pending", value: dashboard.pending_alerts, color: "bg-amber-400" },
-        { label: "High risk", value: dashboard.high_severity_alerts, color: "bg-red-400" },
-        { label: "Escalated", value: dashboard.escalated_alerts, color: "bg-fuchsia-400" },
-        { label: "Suspended", value: dashboard.suspended_users, color: "bg-slate-500" },
-      ]
-    : [];
-
-  const maxChartValue = Math.max(...chartItems.map((item) => item.value), 1);
-  const reviewedCount = alerts.filter((alert) => alert.status === "reviewed").length;
-  const dismissedCount = alerts.filter((alert) => alert.status === "dismissed").length;
-  const mediumRiskCount = alerts.filter((alert) => alert.severity === "medium").length;
-  const topReasons = alerts
-    .flatMap((alert) => (alert.matched_reasons || alert.detail).split(","))
-    .map((reason) => reason.trim())
-    .filter(Boolean)
-    .reduce<Record<string, number>>((acc, reason) => {
-      acc[reason] = (acc[reason] || 0) + 1;
-      return acc;
-    }, {});
-
-  const reasonEntries = Object.entries(topReasons)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5);
-
-  function exportIncidentReport() {
-    downloadCsv(
-      "aurea-incident-report.csv",
-      [
-        "alert_id",
-        "status",
-        "severity",
-        "group_id",
-        "group_name",
-        "sender_username",
-        "sender_display_name",
-        "sender_email",
-        "sender_suspended",
-        "message_id",
-        "message_content",
-        "flag_reason",
-        "admin_note",
-        "reviewed_by",
-        "reviewed_at",
-        "created_at",
-      ],
-      alerts.map((alert) => [
-        alert.id,
-        alert.status,
-        alert.severity,
-        alert.group_id,
-        alert.group_name || "",
-        alert.sender_username,
-        alert.sender_display_name || "",
-        alert.sender_email || "",
-        alert.sender_is_suspended ? "yes" : "no",
-        alert.message_id || "",
-        alert.message_content || alert.trigger_text,
-        alert.matched_reasons || alert.detail,
-        alert.admin_note || "",
-        alert.reviewed_by_username || "",
-        alert.reviewed_at || "",
-        alert.created_at,
-      ])
-    );
+  function updateRange(nextRange: string) {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("range", nextRange);
+    router.push(`/admin/reports?${params.toString()}`);
   }
 
-  function exportUsersReport() {
-    downloadCsv(
-      "aurea-users-report.csv",
-      ["user_id", "username", "full_name", "email", "role", "is_suspended"],
-      users.map((user) => [
-        user.id,
-        user.username,
-        user.full_name || "",
-        user.email,
-        user.role,
-        user.is_suspended ? "yes" : "no",
-      ])
-    );
+  function updateQuery(next: Record<string, string>) {
+    const params = new URLSearchParams(searchParams.toString());
+    Object.entries(next).forEach(([key, value]) => {
+      if (value) params.set(key, value);
+      else params.delete(key);
+    });
+    router.push(`/admin/reports?${params.toString()}`);
   }
 
-  function exportGroupsReport() {
-    downloadCsv(
-      "aurea-groups-report.csv",
-      [
-        "group_id",
-        "group_name",
-        "invite_code",
-        "created_at",
-        "created_by",
-        "member_count",
-        "member_usernames",
-      ],
-      groups.map((group) => [
-        group.id,
-        group.name,
-        group.invite_code,
-        group.created_at,
-        group.created_by_username,
-        group.member_count,
-        group.members.map((member) => member.username).join(" | "),
-      ])
-    );
+  async function downloadCsv(path: string, filename: string) {
+    try {
+      const response = await api.get(path, { params: { range }, responseType: "blob" });
+      const blob = new Blob([response.data], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error, "Could not download CSV"));
+    }
   }
 
-  function exportSummaryReport() {
-    if (!dashboard) return;
+  const summaryCards = useMemo(() => {
+    if (!analytics) return [];
+    return [
+      { label: "Total alerts", value: analytics.summary.total_alerts },
+      { label: "Pending review alerts", value: analytics.summary.pending_review_alerts },
+      { label: "High risk alerts", value: analytics.summary.high_risk_alerts },
+      { label: "Reviewed alerts", value: analytics.summary.reviewed_alerts },
+      { label: "Dismissed alerts", value: analytics.summary.dismissed_alerts },
+      { label: "Total user reports", value: analytics.summary.total_user_reports },
+      { label: "Suspended users", value: analytics.summary.suspended_users },
+      { label: "Restricted groups", value: analytics.summary.restricted_groups },
+      { label: "Active group restrictions", value: analytics.summary.active_group_restrictions },
+      { label: "Suspended groups", value: analytics.summary.suspended_groups },
+    ];
+  }, [analytics]);
 
-    downloadCsv(
-      "aurea-summary-report.csv",
-      ["metric", "value"],
-      [
-        ["total_users", dashboard.total_users],
-        ["total_groups", dashboard.total_groups],
-        ["total_messages", dashboard.total_messages],
-        ["flagged_messages", dashboard.total_alerts],
-        ["pending_reviews", dashboard.pending_alerts],
-        ["high_risk_messages", dashboard.high_severity_alerts],
-        ["escalated_cases", dashboard.escalated_alerts],
-        ["suspended_users", dashboard.suspended_users],
-        ["reviewed_cases", reviewedCount],
-        ["dismissed_cases", dismissedCount],
-      ]
+  const filteredRecentReports = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    const next = [...recentReports].sort((a, b) =>
+      sort === "oldest"
+        ? new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        : new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
-  }
+    if (!needle) return next;
+    return next.filter((report) =>
+      [report.reporter_username, report.reported_username, report.group_name, report.reason, report.details, report.message_preview]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(needle)
+    );
+  }, [recentReports, search, sort]);
 
   return (
     <AppShell>
-      <div className="mx-auto w-full max-w-7xl px-6 py-10">
+      <AdminSurface variant="reports">
+      <div className="aurea-page mx-auto w-full max-w-7xl px-6 py-10">
+        <div className="mb-6">
+          <Link href="/admin" className="aurea-link text-sm font-medium">
+            ← Back to Dashboard
+          </Link>
+        </div>
+
         <div className="grid gap-8">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <h1 className="text-4xl font-semibold tracking-tight text-[#f5ecf8]">
-                <span className="text-[#f5ecf8]">Reports</span>
-              </h1>
-              <p className="mt-1 text-sm text-[#dccfe3]">
-                Generate a quick visual snapshot and export CSV files for incidents, users, groups, and summary reporting.
+              <h1 className="text-4xl font-semibold tracking-tight text-[#FCF8F6]">Reports &amp; Analytics</h1>
+              <p className="mt-2 text-sm text-[#D8CFF0]">
+                Track alert trends, user reports, and moderation activity.
               </p>
             </div>
-
-            <Button
-              variant="outline"
-              className="rounded-2xl border-[#eadbed] bg-[#f6edf8] px-5 text-[#4f3e58] shadow-sm hover:bg-white"
-              onClick={loadReports}
-            >
-              Refresh
-            </Button>
           </div>
 
-          <Card className="rounded-[28px] border border-[#eadbed] bg-[#f6edf8] shadow-sm">
-            <CardHeader>
-              <CardTitle className="text-2xl font-semibold text-[#2b1533]">
-                Exportable report files
-              </CardTitle>
-            </CardHeader>
-
-            <CardContent className="flex flex-wrap gap-3">
-              <Button
-                className="rounded-2xl bg-[#5f4674] text-white hover:bg-[#72588a]"
-                disabled={loading || !dashboard}
-                onClick={exportSummaryReport}
-              >
-                Download summary CSV
-              </Button>
-              <Button
-                variant="outline"
-                className="rounded-2xl border-[#eadbed] bg-white text-[#4f3e58] hover:bg-[#fbf6fc]"
-                disabled={loading}
-                onClick={exportIncidentReport}
-              >
-                Download incidents CSV
-              </Button>
-              <Button
-                variant="outline"
-                className="rounded-2xl border-[#eadbed] bg-white text-[#4f3e58] hover:bg-[#fbf6fc]"
-                disabled={loading}
-                onClick={exportUsersReport}
-              >
-                Download users CSV
-              </Button>
-              <Button
-                variant="outline"
-                className="rounded-2xl border-[#eadbed] bg-white text-[#4f3e58] hover:bg-[#fbf6fc]"
-                disabled={loading}
-                onClick={exportGroupsReport}
-              >
-                Download groups CSV
-              </Button>
+          <Card className="aurea-panel rounded-[28px]">
+            <CardContent className="grid gap-4 p-6 lg:grid-cols-[180px_180px_1fr_auto]">
+              <label className="grid gap-2 text-sm text-[#D8CFF0]">
+                <span>Date range</span>
+                <select value={range} onChange={(event) => updateRange(event.target.value)} className="rounded-2xl border border-white/12 bg-[#140f25] px-4 py-3 text-[#F8F5FF]">
+                  <option value="all">All time</option>
+                  <option value="today">Today</option>
+                  <option value="7d">Last 7 days</option>
+                  <option value="30d">Last 30 days</option>
+                </select>
+              </label>
+              <label className="grid gap-2 text-sm text-[#D8CFF0]">
+                <span>Sort</span>
+                <select value={sort} onChange={(event) => updateQuery({ sort: event.target.value })} className="rounded-2xl border border-white/12 bg-[#140f25] px-4 py-3 text-[#F8F5FF]">
+                  <option value="newest">Newest first</option>
+                  <option value="oldest">Oldest first</option>
+                </select>
+              </label>
+              <label className="grid gap-2 text-sm text-[#D8CFF0]">
+                <span>Search</span>
+                <Input value={searchInput} onChange={(event) => setSearchInput(event.target.value)} placeholder="Search report activity..." className="rounded-2xl border-white/12 bg-[#140f25] text-[#F8F5FF] placeholder:text-[#AFA2C9]" />
+              </label>
+              <div className="flex items-end">
+                <Button variant="outline" className="aurea-button-ghost rounded-2xl" onClick={() => updateQuery({ range: "all", sort: "newest", search: "" })}>
+                  Clear filters
+                </Button>
+              </div>
             </CardContent>
           </Card>
 
-          <div className="grid gap-8 xl:grid-cols-[1.2fr_.8fr]">
-            <Card className="rounded-[28px] border border-[#eadbed] bg-[#f6edf8] shadow-sm">
-              <CardHeader>
-                <CardTitle className="text-2xl font-semibold text-[#2b1533]">
-                  Moderation activity chart
-                </CardTitle>
-              </CardHeader>
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+            {(loading
+              ? Array.from({ length: 5 }).map((_, index) => ({ label: `skeleton-${index}`, value: " " }))
+              : summaryCards).map((card) => (
+              <Card key={card.label} className="aurea-panel rounded-[24px]">
+                <CardContent className="p-5">
+                  {loading ? (
+                    <>
+                      <div className="h-4 w-28 animate-pulse rounded-full bg-white/10" />
+                      <div className="mt-3 h-9 w-20 animate-pulse rounded-2xl bg-white/12" />
+                    </>
+                  ) : (
+                    <>
+                      <div className="text-sm text-[#D8CFF0]">{card.label}</div>
+                      <div className="mt-3 text-3xl font-semibold text-[#FCF8F6]">{card.value}</div>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
 
-              <CardContent className="max-h-[70vh] overflow-y-auto pr-2">
-                {loading ? (
-                  <div className="text-[#6d5a75]">Loading chart...</div>
-                ) : (
-                  <div className="grid gap-4">
-                    <div className="grid min-h-[260px] grid-cols-5 items-end gap-4 rounded-[24px] bg-white p-6">
-                      {chartItems.map((item) => (
-                        <div key={item.label} className="flex h-full flex-col justify-end gap-3">
-                          <div className="flex justify-center text-sm font-semibold text-[#2b1533]">
-                            {item.value}
-                          </div>
-                          <div
-                            className={`w-full rounded-t-[18px] ${item.color}`}
-                            style={{
-                              height: `${Math.max((item.value / maxChartValue) * 180, 14)}px`,
-                            }}
-                          />
-                          <div className="text-center text-xs font-medium uppercase tracking-wide text-[#7d6783]">
-                            {item.label}
-                          </div>
+          <div className="grid gap-5 xl:grid-cols-2">
+            {loading ? (
+              Array.from({ length: 6 }).map((_, index) => (
+                <Card key={`reports-chart-skeleton-${index}`} className="aurea-panel rounded-[28px]">
+                  <CardContent className="p-6">
+                    <div className="h-6 w-40 animate-pulse rounded-full bg-white/10" />
+                    <div className="mt-5 grid gap-4">
+                      {Array.from({ length: 4 }).map((__, row) => (
+                        <div key={`reports-chart-row-${index}-${row}`} className="grid gap-2">
+                          <div className="h-4 w-full animate-pulse rounded-full bg-white/8" />
+                          <div className="h-2 w-full animate-pulse rounded-full bg-white/10" />
                         </div>
                       ))}
                     </div>
-
-                    <div className="text-sm text-[#6d5a75]">
-                      This quick chart gives you a report-friendly picture of the current moderation load.
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card className="rounded-[28px] border border-[#eadbed] bg-[#f6edf8] shadow-sm">
-              <CardHeader>
-                <CardTitle className="text-2xl font-semibold text-[#2b1533]">
-                  Snapshot
-                </CardTitle>
-              </CardHeader>
-
-              <CardContent className="grid max-h-[70vh] gap-3 overflow-y-auto pr-2">
-                <div className="rounded-[22px] bg-white p-4">
-                  <div className="text-sm text-[#7d6783]">Reviewed cases</div>
-                  <div className="text-3xl font-semibold text-[#2b1533]">{reviewedCount}</div>
-                </div>
-                <div className="rounded-[22px] bg-white p-4">
-                  <div className="text-sm text-[#7d6783]">Dismissed cases</div>
-                  <div className="text-3xl font-semibold text-[#2b1533]">{dismissedCount}</div>
-                </div>
-                <div className="rounded-[22px] bg-white p-4">
-                  <div className="text-sm text-[#7d6783]">Medium risk messages</div>
-                  <div className="text-3xl font-semibold text-[#2b1533]">{mediumRiskCount}</div>
-                </div>
-                <div className="rounded-[22px] bg-white p-4">
-                  <div className="text-sm text-[#7d6783]">Latest incident</div>
-                  <div className="mt-1 text-sm font-medium text-[#2b1533]">
-                    {alerts[0] ? formatDate(alerts[0].created_at) : "No incidents yet"}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                  </CardContent>
+                </Card>
+              ))
+            ) : (
+              <>
+                <BarChartCard title="Alerts by severity" points={analytics?.alerts_by_severity || []} />
+                <BarChartCard title="Alerts by status" points={analytics?.alerts_by_status || []} />
+                <BarChartCard title="Reports by reason" points={analytics?.reports_by_reason || []} />
+                <BarChartCard title="Safety activity over time" points={analytics?.safety_activity_over_time || []} />
+                <BarChartCard title="Top flagged groups" points={analytics?.top_flagged_groups || []} />
+                <BarChartCard title="Top repeated risk categories" points={analytics?.top_risk_categories || []} />
+              </>
+            )}
           </div>
 
-          <div className="grid gap-8 xl:grid-cols-[1fr_1fr]">
-            <Card className="rounded-[28px] border border-[#eadbed] bg-[#f6edf8] shadow-sm">
-              <CardHeader>
-                <CardTitle className="text-2xl font-semibold text-[#2b1533]">
-                  Most common reasons
-                </CardTitle>
-              </CardHeader>
+          <Card className="aurea-panel rounded-[28px]">
+            <CardContent className="flex flex-col gap-4 p-6 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <div className="text-lg font-semibold text-[#FCF8F6]">CSV downloads</div>
+                <div className="mt-2 text-sm text-[#D8CFF0]">
+                  Export real alert, report, and moderation summary data.
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <Button className="rounded-2xl bg-[#5c3d86] text-white hover:bg-[#4f3473]" onClick={() => void downloadCsv("/admin/reports/alerts.csv", "aurea-alerts.csv")}>
+                  Download Alerts CSV
+                </Button>
+                <Button className="rounded-2xl bg-[#5c3d86] text-white hover:bg-[#4f3473]" onClick={() => void downloadCsv("/admin/reports/user-reports.csv", "aurea-user-reports.csv")}>
+                  Download User Reports CSV
+                </Button>
+                <Button variant="outline" className="aurea-button-ghost rounded-2xl" onClick={() => void downloadCsv("/admin/reports/summary.csv", "aurea-moderation-summary.csv")}>
+                  Download Moderation Summary CSV
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
 
-              <CardContent className="grid max-h-[70vh] gap-3 overflow-y-auto pr-2">
-                {loading ? (
-                  <div className="text-[#6d5a75]">Loading reasons...</div>
-                ) : reasonEntries.length === 0 ? (
-                  <div className="text-[#6d5a75]">No flagged reasons available yet.</div>
+          <Card className="aurea-panel rounded-[28px]">
+            <CardContent className="p-6">
+              <div className="text-lg font-semibold text-[#FCF8F6]">Recent report activity</div>
+              <div className="mt-5 grid gap-3">
+                {filteredRecentReports.length === 0 ? (
+                  <div className="text-sm text-[#D8CFF0]">No report activity in this range.</div>
                 ) : (
-                  reasonEntries.map(([reason, count]) => (
-                    <div
-                      key={reason}
-                      className="flex items-center justify-between rounded-[20px] bg-white p-4"
-                    >
-                      <div className="pr-4 text-sm font-medium text-[#2b1533]">{reason}</div>
-                      <div className="rounded-full bg-[#f1e2f4] px-3 py-1 text-sm font-semibold text-[#5f4674]">
-                        {count}
-                      </div>
-                    </div>
-                  ))
-                )}
-              </CardContent>
-            </Card>
-
-            <Card className="rounded-[28px] border border-[#eadbed] bg-[#f6edf8] shadow-sm">
-              <CardHeader>
-                <CardTitle className="text-2xl font-semibold text-[#2b1533]">
-                  Report preview
-                </CardTitle>
-              </CardHeader>
-
-              <CardContent className="grid max-h-[70vh] gap-3 overflow-y-auto pr-2">
-                {loading ? (
-                  <div className="text-[#6d5a75]">Loading preview...</div>
-                ) : alerts.length === 0 ? (
-                  <div className="text-[#6d5a75]">No incidents to preview yet.</div>
-                ) : (
-                  alerts.slice(0, 3).map((alert) => (
-                    <div
-                      key={alert.id}
-                      className="rounded-[20px] border border-[#eadbed] bg-white p-4"
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="font-semibold text-[#2b1533]">
-                          Alert #{alert.id} · {alert.group_name || `Group ${alert.group_id}`}
+                  filteredRecentReports.slice(0, 10).map((report) => (
+                    <div key={report.id} className="aurea-panel-soft rounded-[22px] p-4">
+                      <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+                        <div className="font-medium text-[#FCF8F6]">
+                          <Link href={`/profile/${report.reporter_username}`} className="hover:text-[#F5D547]">
+                            @{report.reporter_username}
+                          </Link>{" "}
+                          reported{" "}
+                          <Link href={`/profile/${report.reported_username}`} className="hover:text-[#F5D547]">
+                            @{report.reported_username}
+                          </Link>
                         </div>
-                        <div className="text-xs text-[#7d6783]">{formatDate(alert.created_at)}</div>
+                        <span className="text-sm text-[#D8CFF0]">{new Date(report.created_at).toLocaleString()}</span>
                       </div>
-                      <div className="mt-2 text-sm text-[#6d5a75]">
-                        Sender:{" "}
-                        <span className="font-medium text-[#2b1533]">
-                          {alert.sender_display_name || alert.sender_username}
-                        </span>
+                      <div className="mt-2 text-sm text-[#D8CFF0]">
+                        {report.group_name ? `${report.group_name} · ` : ""}
+                        {report.reason}
                       </div>
-                      <div className="mt-2 text-sm text-[#2b1533]">
-                        {alert.message_content || alert.trigger_text}
-                      </div>
-                      <div className="mt-3 text-xs text-[#7d6783]">
-                        Reason: {alert.matched_reasons || alert.detail}
+                      <div className="mt-2 text-sm text-[#F8F5FF]">
+                        {report.message_preview || report.details || "No extra details provided."}
                       </div>
                     </div>
                   ))
                 )}
-              </CardContent>
-            </Card>
-          </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
+      </AdminSurface>
     </AppShell>
   );
 }
